@@ -1,20 +1,48 @@
 import React, { useEffect, useState } from 'react';
-import { Cpu, RefreshCw, Search, Filter, Play, CheckCircle2, AlertTriangle, Terminal, X, Zap, ArrowUpRight } from 'lucide-react';
+import {
+  Search,
+  Zap,
+  ArrowUpRight,
+  GitPullRequest,
+  GitCommit,
+  Radio,
+  TrendingUp,
+  RefreshCw,
+  Cpu,
+} from 'lucide-react';
 import { DocJob } from '../types';
-import { fetchJobById, fetchJobs, retryJob } from '../services/api';
+import { fetchJobs, fetchJobsStats, retryJob, formatFormattedTimestamp } from '../services/api';
+
+interface JobStatsState {
+  creditsBurnedToday: number;
+  activeRepoHooks: number;
+  docPRsDelivered: number;
+  openPRsCount: number;
+  activeJobsCount: number;
+  actionRequiredCount: number;
+}
 
 export const JobsLogsPage: React.FC = () => {
   const [jobs, setJobs] = useState<DocJob[]>([]);
-  const [selectedJob, setSelectedJob] = useState<DocJob | null>(null);
-  const [liveStream, setLiveStream] = useState<boolean>(true);
+  const [stats, setStats] = useState<JobStatsState>({
+    creditsBurnedToday: 0,
+    activeRepoHooks: 0,
+    docPRsDelivered: 0,
+    openPRsCount: 0,
+    activeJobsCount: 0,
+    actionRequiredCount: 0,
+  });
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [search, setSearch] = useState<string>('');
-  const [retrying, setRetrying] = useState<boolean>(false);
+  const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
+  const [timeframe, setTimeframe] = useState<'7d' | '30d' | 'all'>('7d');
 
   const loadData = () => {
     fetchJobs().then((data) => {
-      setJobs(data);
-      if (data.length > 0 && !selectedJob) setSelectedJob(data[0]);
+      if (Array.isArray(data)) setJobs(data);
+    });
+    fetchJobsStats().then((s) => {
+      if (s) setStats(s);
     });
   };
 
@@ -22,75 +50,250 @@ export const JobsLogsPage: React.FC = () => {
     loadData();
   }, []);
 
-  const handleSelectJob = async (j: DocJob) => {
-    setSelectedJob(j);
-    const details = await fetchJobById(j.id);
-    if (details) {
-      setSelectedJob({
-        ...j,
-        modelUsed: details.llmLogs && details.llmLogs[0] ? details.llmLogs[0].modelName : j.modelUsed,
-        latencyMs: details.tokenBreakdown?.durationMs || j.latencyMs,
-        tokenBreakdown: details.tokenBreakdown ? {
-          prompt: details.tokenBreakdown.promptTokens || 0,
-          cached: details.tokenBreakdown.cachedTokens || 0,
-          input: details.tokenBreakdown.inputTokens || 0,
-          output: details.tokenBreakdown.outputTokens || 0,
-        } : j.tokenBreakdown,
-        logs: details.stdoutLogs || j.logs,
-      });
+  const handleRetryJob = async (jobId: string) => {
+    setRetryingJobId(jobId);
+    try {
+      await retryJob(jobId);
+      alert(`Job #${jobId.slice(0, 8)} re-queued successfully!`);
+      loadData();
+    } catch (err) {
+      alert(`Retry error: ${(err as Error).message || err}`);
+    } finally {
+      setRetryingJobId(null);
     }
   };
 
-  const handleRetryJob = async (jobId: string) => {
-    setRetrying(true);
-    try {
-      await retryJob(jobId);
-      alert('Job re-queued successfully!');
-      loadData();
-    } catch (err) {
-      alert(`Retry error: ${(err as Error).message}`);
-    } finally {
-      setRetrying(false);
+  // Build time series data for Jobs Across Time Graph
+  const getTimeSeriesData = () => {
+    const days = timeframe === '7d' ? 7 : timeframe === '30d' ? 30 : 90;
+    const now = new Date();
+    const map: Record<string, number> = {};
+    const series: Array<{ date: string; fullDate: string; count: number }> = [];
+
+    const getLocalDateKey = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const key = getLocalDateKey(d);
+      const display = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      map[key] = 0;
+      series.push({ date: display, fullDate: key, count: 0 });
     }
+
+    jobs.forEach((j) => {
+      if (j.createdAt) {
+        const d = new Date(j.createdAt);
+        if (!isNaN(d.getTime())) {
+          const key = getLocalDateKey(d);
+          if (map[key] !== undefined) {
+            map[key] += 1;
+          }
+        }
+      }
+    });
+
+    return series.map((s) => ({
+      ...s,
+      count: map[s.fullDate] || 0,
+    }));
+  };
+
+  const currentSeries = getTimeSeriesData();
+
+  // Render SVG Line Chart Graph
+  const renderJobsLineChart = () => {
+    if (!currentSeries || currentSeries.length === 0) {
+      return (
+        <div style={{ height: '130px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#71717a', fontSize: '0.8rem' }}>
+          No job execution metrics available.
+        </div>
+      );
+    }
+
+    const width = 500;
+    const height = 120;
+    const padding = 15;
+
+    const maxVal = Math.max(...currentSeries.map((d) => d.count), 4);
+    const points = currentSeries.map((item, idx) => {
+      const x = padding + (idx / Math.max(1, currentSeries.length - 1)) * (width - 2 * padding);
+      const y = height - padding - (item.count / maxVal) * (height - 2 * padding);
+      return { x, y, val: item.count, label: item.date };
+    });
+
+    const pathD = points.reduce((acc, p, idx) => `${acc} ${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`, '');
+    const areaD = `${pathD} L ${points[points.length - 1].x} ${height - padding} L ${points[0].x} ${height - padding} Z`;
+
+    return (
+      <div style={{ width: '100%', overflowX: 'auto' }}>
+        <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '130px', overflow: 'visible' }}>
+          <defs>
+            <linearGradient id="jobsChartGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#34d399" stopOpacity="0.45" />
+              <stop offset="100%" stopColor="#34d399" stopOpacity="0.0" />
+            </linearGradient>
+          </defs>
+
+          {/* Grid lines */}
+          <line x1={padding} y1={padding} x2={width - padding} y2={padding} stroke="#27272a" strokeDasharray="3 3" />
+          <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="#27272a" strokeDasharray="3 3" />
+          <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#27272a" />
+
+          {/* Gradient Area Fill */}
+          <path d={areaD} fill="url(#jobsChartGrad)" />
+
+          {/* Main Line Path */}
+          <path d={pathD} fill="none" stroke="#34d399" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+
+          {/* Data Points */}
+          {points.map((p, i) => (
+            <g key={i}>
+              <circle cx={p.x} cy={p.y} r={p.val > 0 ? 4 : 2} fill={p.val > 0 ? '#a78bfa' : '#34d399'} stroke="#0c0c0f" strokeWidth="2">
+                <title>{`${p.label}: ${p.val} job executions`}</title>
+              </circle>
+            </g>
+          ))}
+        </svg>
+
+        {/* X-Axis Labels */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#71717a', padding: '0 0.5rem', marginTop: '0.2rem' }}>
+          <span>{currentSeries[0]?.date}</span>
+          {currentSeries.length > 2 && <span>{currentSeries[Math.floor(currentSeries.length / 2)]?.date}</span>}
+          <span>{currentSeries[currentSeries.length - 1]?.date}</span>
+        </div>
+      </div>
+    );
   };
 
   const filteredJobs = jobs.filter((j) => {
     const matchesStatus = statusFilter === 'ALL' || j.status === statusFilter;
-    const matchesSearch = j.id.toLowerCase().includes(search.toLowerCase()) || j.sha.toLowerCase().includes(search.toLowerCase()) || j.repoName.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch =
+      j.id.toLowerCase().includes(search.toLowerCase()) ||
+      (j.sha || '').toLowerCase().includes(search.toLowerCase()) ||
+      (j.repoName || '').toLowerCase().includes(search.toLowerCase());
     return matchesStatus && matchesSearch;
   });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {/* Quick Metrics Ribbon */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
-        <div className="glass-panel" style={{ padding: '1.25rem', backgroundColor: '#0c0c0f', borderColor: '#27272a' }}>
-          <div style={{ fontSize: '0.8rem', color: '#71717a', fontWeight: 600 }}>Avg AST Pipeline Latency</div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#a78bfa', marginTop: '0.25rem' }}>3.12s</div>
-          <div style={{ fontSize: '0.75rem', color: '#34d399' }}>⚡ Optimized Gemini 1.5 Pro TTFT</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%' }}>
+      {/* TOP INFORMATIVE SECTION: METRIC WIDGETS + JOBS ACROSS TIME GRAPH */}
+      <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth >= 1024 ? '35% 65%' : '1fr', gap: '1.25rem' }}>
+        {/* LEFT COLUMN: KEY METRIC CARDS */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {/* Card 1: Credits Burned Today */}
+          <div className="glass-panel" style={{ padding: '1rem 1.25rem', backgroundColor: '#0c0c0f', borderColor: '#27272a' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '0.8rem', color: '#a1a1aa', fontWeight: 600 }}>Credits Burned Today</span>
+              <div style={{ backgroundColor: '#27272a', padding: '0.35rem', borderRadius: '6px' }}>
+                <Zap size={16} color="#eab308" />
+              </div>
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#fafafa', marginTop: '0.3rem' }}>
+              {stats.creditsBurnedToday} <span style={{ fontSize: '1.1rem', color: '#eab308' }}>⚡</span>
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#71717a', marginTop: '0.15rem' }}>
+              Across {stats.activeRepoHooks} active repository hooks
+            </div>
+          </div>
+
+          {/* Card 2: Doc PRs Delivered */}
+          <div className="glass-panel" style={{ padding: '1rem 1.25rem', backgroundColor: '#0c0c0f', borderColor: '#27272a' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '0.8rem', color: '#a1a1aa', fontWeight: 600 }}>Doc PRs Delivered</span>
+              <div style={{ backgroundColor: '#14532d33', padding: '0.35rem', borderRadius: '6px' }}>
+                <GitPullRequest size={16} color="#34d399" />
+              </div>
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#34d399', marginTop: '0.3rem' }}>
+              {stats.docPRsDelivered}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#a1a1aa', marginTop: '0.15rem' }}>
+              {stats.openPRsCount} open PRs awaiting merge on GitHub
+            </div>
+          </div>
         </div>
 
-        <div className="glass-panel" style={{ padding: '1.25rem', backgroundColor: '#0c0c0f', borderColor: '#27272a' }}>
-          <div style={{ fontSize: '0.8rem', color: '#71717a', fontWeight: 600 }}>Job Success Rate</div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#34d399', marginTop: '0.25rem' }}>98.4%</div>
-          <div style={{ fontSize: '0.75rem', color: '#a1a1aa' }}>1,248 completed runs</div>
-        </div>
+        {/* RIGHT COLUMN: JOBS ACROSS TIME GRAPH PANEL */}
+        <div className="glass-panel" style={{ padding: '1.25rem 1.5rem', backgroundColor: '#0c0c0f', borderColor: '#27272a', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+            <div>
+              <div style={{ fontSize: '0.9rem', color: '#fafafa', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <TrendingUp size={16} color="#34d399" /> Jobs Execution History Across Time
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#a1a1aa', marginTop: '0.15rem' }}>
+                Total Executed Runs: <strong style={{ color: '#fafafa' }}>{jobs.length} jobs</strong>
+              </div>
+            </div>
 
-        <div className="glass-panel" style={{ padding: '1.25rem', backgroundColor: '#0c0c0f', borderColor: '#27272a' }}>
-          <div style={{ fontSize: '0.8rem', color: '#71717a', fontWeight: 600 }}>Credits Burned Today</div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#fafafa', marginTop: '0.25rem' }}>18 ⚡</div>
-          <div style={{ fontSize: '0.75rem', color: '#71717a' }}>4 active repository hooks</div>
+            {/* Timeframe Toggle Pill Buttons */}
+            <div style={{ display: 'flex', backgroundColor: '#18181b', padding: '0.2rem', borderRadius: '6px', border: '1px solid #27272a' }}>
+              <button
+                onClick={() => setTimeframe('7d')}
+                style={{
+                  padding: '0.25rem 0.6rem',
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  borderRadius: '4px',
+                  border: 'none',
+                  backgroundColor: timeframe === '7d' ? '#27272a' : 'transparent',
+                  color: timeframe === '7d' ? '#fafafa' : '#71717a',
+                  cursor: 'pointer',
+                }}
+              >
+                Last 7 days
+              </button>
+              <button
+                onClick={() => setTimeframe('30d')}
+                style={{
+                  padding: '0.25rem 0.6rem',
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  borderRadius: '4px',
+                  border: 'none',
+                  backgroundColor: timeframe === '30d' ? '#27272a' : 'transparent',
+                  color: timeframe === '30d' ? '#fafafa' : '#71717a',
+                  cursor: 'pointer',
+                }}
+              >
+                30 days
+              </button>
+              <button
+                onClick={() => setTimeframe('all')}
+                style={{
+                  padding: '0.25rem 0.6rem',
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  borderRadius: '4px',
+                  border: 'none',
+                  backgroundColor: timeframe === 'all' ? '#27272a' : 'transparent',
+                  color: timeframe === 'all' ? '#fafafa' : '#71717a',
+                  cursor: 'pointer',
+                }}
+              >
+                All time
+              </button>
+            </div>
+          </div>
+
+          {/* SVG Line Chart Graph */}
+          {renderJobsLineChart()}
         </div>
       </div>
 
-      {/* Filter & Search Bar */}
+      {/* FILTER & SEARCH BAR */}
       <div className="glass-panel" style={{ padding: '1rem 1.25rem', backgroundColor: '#0c0c0f', borderColor: '#27272a', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1 }}>
-          <div style={{ position: 'relative', width: '280px' }}>
+          <div style={{ position: 'relative', width: '320px' }}>
             <Search size={14} color="#71717a" style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)' }} />
             <input
               type="text"
-              placeholder="Search by Job ID, SHA, Repo..."
+              placeholder="Search by Job ID, Commit SHA, Repository..."
               className="input-field"
               style={{ paddingLeft: '2.25rem', fontSize: '0.85rem' }}
               value={search}
@@ -100,7 +303,7 @@ export const JobsLogsPage: React.FC = () => {
 
           <select
             className="input-field"
-            style={{ width: '180px', fontSize: '0.85rem' }}
+            style={{ width: '220px', fontSize: '0.85rem' }}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
@@ -109,172 +312,166 @@ export const JobsLogsPage: React.FC = () => {
             <option value="PR_OPEN">PR_OPEN</option>
             <option value="GENERATING">GENERATING</option>
             <option value="FAILED">FAILED</option>
+            <option value="INSUFFICIENT_CREDITS">INSUFFICIENT_CREDITS</option>
+            <option value="QUEUED">QUEUED</option>
+            <option value="DROPPED">DROPPED</option>
+            <option value="LLM_JUDGE_REJECTED">LLM_JUDGE_REJECTED</option>
           </select>
         </div>
 
-        {/* Live SSE Stream Toggle */}
-        <button
-          onClick={() => setLiveStream(!liveStream)}
-          className={`btn ${liveStream ? 'btn-primary' : 'btn-secondary'}`}
-          style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-        >
-          <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: liveStream ? '#34d399' : '#71717a', display: 'inline-block' }} />
-          {liveStream ? 'Live Telemetry Stream ON' : 'Paused'}
+        <button onClick={loadData} className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.45rem 0.85rem' }}>
+          <RefreshCw size={14} /> Refresh Logs
         </button>
       </div>
 
-      {/* SPLIT TABLE & DRAWER LAYOUT */}
-      <div style={{ display: 'grid', gridTemplateColumns: selectedJob ? '60% 40%' : '1fr', gap: '1.5rem' }}>
-        {/* EXECUTION STREAM TABLE */}
-        <div className="glass-panel" style={{ backgroundColor: '#0c0c0f', borderColor: '#27272a', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#121215', borderBottom: '1px solid #27272a', fontSize: '0.75rem', color: '#71717a', textTransform: 'uppercase' }}>
-                <th style={{ padding: '0.75rem 1rem' }}>Job ID</th>
-                <th style={{ padding: '0.75rem 1rem' }}>Repository</th>
-                <th style={{ padding: '0.75rem 1rem' }}>Commit SHA</th>
-                <th style={{ padding: '0.75rem 1rem' }}>Status</th>
-                <th style={{ padding: '0.75rem 1rem' }}>Credits</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Actions</th>
+      {/* FULL WIDTH EXECUTION LOGS TABLE */}
+      <div className="glass-panel" style={{ backgroundColor: '#0c0c0f', borderColor: '#27272a', overflow: 'hidden', width: '100%' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#121215', borderBottom: '1px solid #27272a', fontSize: '0.75rem', color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <th style={{ padding: '0.9rem 1.2rem' }}>Job ID</th>
+              <th style={{ padding: '0.9rem 1.2rem' }}>Repository</th>
+              <th style={{ padding: '0.9rem 1.2rem' }}>Commit SHA</th>
+              <th style={{ padding: '0.9rem 1.2rem' }}>Trigger Event</th>
+              <th style={{ padding: '0.9rem 1.2rem' }}>Executed Date & Time</th>
+              <th style={{ padding: '0.9rem 1.2rem' }}>Status</th>
+              <th style={{ padding: '0.9rem 1.2rem' }}>Credits Burned</th>
+              <th style={{ padding: '0.9rem 1.2rem' }}>Pull Request</th>
+              <th style={{ padding: '0.9rem 1.2rem', textAlign: 'right' }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredJobs.length === 0 ? (
+              <tr>
+                <td colSpan={9} style={{ textAlign: 'center', padding: '3rem 1rem', color: '#71717a', fontSize: '0.85rem' }}>
+                  No execution runs match your current filter or search criteria.
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {filteredJobs.map((j) => (
-                <tr
-                  key={j.id}
-                  onClick={() => handleSelectJob(j)}
-                  style={{
-                    borderBottom: '1px solid #1e1e22',
-                    backgroundColor: selectedJob?.id === j.id ? '#1e1e22' : 'transparent',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <td style={{ padding: '0.85rem 1rem', fontWeight: 700, color: '#fafafa', fontFamily: 'var(--font-mono)' }}>
-                    #{j.id.slice(0, 8)}
-                  </td>
-                  <td style={{ padding: '0.85rem 1rem', fontSize: '0.85rem', color: '#fafafa' }}>
-                    {j.repoName}
-                  </td>
-                  <td style={{ padding: '0.85rem 1rem', fontSize: '0.8rem', color: '#a78bfa', fontFamily: 'var(--font-mono)' }}>
-                    {j.sha}
-                  </td>
-                  <td style={{ padding: '0.85rem 1rem' }}>
-                    <span className={`badge ${j.status === 'PR_OPEN' || j.status === 'COMPLETED' ? 'badge-success' : 'badge-warning'}`}>
-                      {j.status}
-                    </span>
-                  </td>
-                  <td style={{ padding: '0.85rem 1rem', fontSize: '0.85rem', fontWeight: 600, color: '#fafafa' }}>
-                    {j.creditsUsed} ⚡
-                  </td>
-                  <td style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
-                      {(j.status === 'FAILED' || j.status === 'INSUFFICIENT_CREDITS') && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRetryJob(j.id);
+            ) : (
+              filteredJobs.map((j) => {
+                const canRetry = j.status === 'FAILED' || j.status === 'INSUFFICIENT_CREDITS' || j.status === 'DROPPED' || j.status === 'LLM_JUDGE_REJECTED' || j.status === 'QUEUED';
+                const isRetrying = retryingJobId === j.id;
+
+                return (
+                  <tr
+                    key={j.id}
+                    style={{
+                      borderBottom: '1px solid #1e1e22',
+                      transition: 'background-color 0.15s ease',
+                    }}
+                    className="hover:bg-[#121215]"
+                  >
+                    {/* Job ID */}
+                    <td style={{ padding: '1rem 1.2rem', fontWeight: 700, color: '#fafafa', fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}>
+                      #{j.id.slice(0, 8)}
+                    </td>
+
+                    {/* Repository */}
+                    <td style={{ padding: '1rem 1.2rem', fontSize: '0.85rem', fontWeight: 600, color: '#fafafa' }}>
+                      {j.repoName}
+                    </td>
+
+                    {/* Commit SHA */}
+                    <td style={{ padding: '1rem 1.2rem', fontSize: '0.8rem', color: '#a78bfa', fontFamily: 'var(--font-mono)' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', backgroundColor: '#1e1b4b', padding: '0.2rem 0.5rem', borderRadius: '4px', border: '1px solid #312e81' }}>
+                        <GitCommit size={13} color="#a78bfa" />
+                        {j.sha}
+                      </div>
+                    </td>
+
+                    {/* Trigger Event */}
+                    <td style={{ padding: '1rem 1.2rem', fontSize: '0.8rem', color: '#a1a1aa' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <Radio size={12} color="#34d399" />
+                        {j.triggerEvent || 'git.push (Webhook)'}
+                      </div>
+                    </td>
+
+                    {/* Executed Date & Time */}
+                    <td style={{ padding: '1rem 1.2rem', fontSize: '0.8rem', color: '#a1a1aa', fontFamily: 'var(--font-mono)' }}>
+                      {j.displayTime || formatFormattedTimestamp(j.createdAt)}
+                    </td>
+
+                    {/* Status Badge */}
+                    <td style={{ padding: '1rem 1.2rem' }}>
+                      <span className={`badge ${j.status === 'PR_OPEN' || j.status === 'COMPLETED' || j.status === 'MERGED' ? 'badge-success' : j.status === 'FAILED' || j.status === 'INSUFFICIENT_CREDITS' || j.status === 'DROPPED' || j.status === 'LLM_JUDGE_REJECTED' ? 'badge-danger' : 'badge-warning'}`}>
+                        {j.status}
+                      </span>
+                    </td>
+
+                    {/* Credits Burned */}
+                    <td style={{ padding: '1rem 1.2rem', fontSize: '0.85rem', fontWeight: 700, color: j.creditsUsed > 0 ? '#fafafa' : '#71717a' }}>
+                      {j.creditsUsed} <span style={{ color: '#eab308' }}>⚡</span>
+                    </td>
+
+                    {/* Link to PR */}
+                    <td style={{ padding: '1rem 1.2rem', fontSize: '0.85rem' }}>
+                      {j.prUrl ? (
+                        <a
+                          href={j.prUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-secondary"
+                          style={{
+                            padding: '0.3rem 0.65rem',
+                            fontSize: '0.75rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            color: '#34d399',
+                            borderColor: '#05966944',
+                            backgroundColor: '#064e3b22',
+                            textDecoration: 'none',
                           }}
-                          disabled={retrying}
-                          className="btn btn-primary"
-                          style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
                         >
-                          <Play size={12} /> Retry
-                        </button>
+                          <GitPullRequest size={13} color="#34d399" />
+                          Review PR #{j.prNumber || ''} <ArrowUpRight size={13} color="#34d399" />
+                        </a>
+                      ) : (
+                        <span style={{ color: '#52525b', fontSize: '0.8rem' }}>—</span>
                       )}
-                      <button className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}>
-                        <Terminal size={12} /> Logs
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    </td>
 
-        {/* TELEMETRY & LLM LOGS DRAWER (RIGHT PANEL) */}
-        {selectedJob && (
-          <div className="glass-panel" style={{ backgroundColor: '#0c0c0f', borderColor: '#27272a', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #27272a', paddingBottom: '0.75rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Terminal size={18} color="#34d399" />
-                <span style={{ fontWeight: 700, color: '#fafafa' }}>Telemetry Logs #{selectedJob.id}</span>
-              </div>
-              <button onClick={() => setSelectedJob(null)} style={{ background: 'transparent', border: 'none', color: '#71717a', cursor: 'pointer' }}>
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Token & Latency Metadata Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem', backgroundColor: '#121215', padding: '0.85rem', borderRadius: '8px', border: '1px solid #27272a' }}>
-              <div>
-                <div style={{ fontSize: '0.7rem', color: '#71717a' }}>Assigned Model</div>
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#a78bfa' }}>{selectedJob.modelUsed || 'gemini-1.5-pro'}</div>
-              </div>
-              <div>
-                <div style={{ fontSize: '0.7rem', color: '#71717a' }}>Latency / TTFT</div>
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#34d399' }}>{selectedJob.latencyMs || 3420} ms</div>
-              </div>
-              <div>
-                <div style={{ fontSize: '0.7rem', color: '#71717a' }}>Prompt Tokens</div>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fafafa', fontFamily: 'var(--font-mono)' }}>
-                  {selectedJob.tokenBreakdown?.prompt || 4200}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: '0.7rem', color: '#71717a' }}>Output Tokens</div>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fafafa', fontFamily: 'var(--font-mono)' }}>
-                  {selectedJob.tokenBreakdown?.output || 850}
-                </div>
-              </div>
-            </div>
-
-            {/* Stdout Terminal Log Output */}
-            <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#71717a', textTransform: 'uppercase', marginBottom: '0.35rem' }}>
-                Stdout Console Stream
-              </div>
-              <div
-                style={{
-                  backgroundColor: '#09090b',
-                  border: '1px solid #27272a',
-                  borderRadius: '8px',
-                  padding: '0.85rem',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.75rem',
-                  color: '#34d399',
-                  maxHeight: '260px',
-                  overflowY: 'auto',
-                }}
-              >
-                {(selectedJob.logs || [
-                  '[00:00.01] GitHub Webhook signature verified (event: push)',
-                  '[00:00.24] Cloned commit e8f9a2b (shallow depth 1)',
-                  '[00:01.44] AST diff scanner extracted 14 file changes',
-                  '[00:01.88] Dispatched prompt sys.docgen.ast-v1.0 to Gemini 1.5 Pro',
-                  '[00:03.42] Generated ARCHITECTURE.md diff successfully',
-                  '[00:03.90] Pull Request #42 opened on GitHub',
-                ]).map((logLine, idx) => (
-                  <div key={idx} style={{ marginBottom: '0.2rem' }}>
-                    {logLine}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {selectedJob.prUrl && (
-              <a
-                href={selectedJob.prUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="btn btn-primary"
-                style={{ width: '100%', padding: '0.6rem' }}
-              >
-                Review Pull Request #{selectedJob.prNumber} <ArrowUpRight size={14} />
-              </a>
+                    {/* Actions */}
+                    <td style={{ padding: '1rem 1.2rem', textAlign: 'right' }}>
+                      {canRetry ? (
+                        <button
+                          onClick={() => handleRetryJob(j.id)}
+                          disabled={isRetrying}
+                          className="btn btn-primary"
+                          style={{
+                            padding: '0.35rem 0.75rem',
+                            fontSize: '0.75rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            cursor: isRetrying ? 'not-allowed' : 'pointer',
+                            opacity: isRetrying ? 0.7 : 1,
+                          }}
+                        >
+                          <RefreshCw size={12} className={isRetrying ? 'spin' : ''} />
+                          {isRetrying ? 'Retrying...' : 'Retry Job'}
+                        </button>
+                      ) : j.prUrl ? (
+                        <a
+                          href={j.prUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-secondary"
+                          style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', textDecoration: 'none' }}
+                        >
+                          Open GitHub
+                        </a>
+                      ) : (
+                        <span style={{ color: '#52525b', fontSize: '0.75rem' }}>Completed</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
             )}
-          </div>
-        )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

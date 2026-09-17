@@ -25,7 +25,7 @@ export const HeroLandingPage: React.FC<HeroLandingPageProps> = ({ onStartDemo })
             marginBottom: '1.5rem',
           }}
         >
-          <Sparkles size={14} /> Autonomous Commit-Driven AST Documentation Engine v1.0
+          <Sparkles size={14} /> Autonomous Commit-Driven Documentation Engine v1.0
         </div>
 
         <h1 style={{ fontSize: window.innerWidth < 768 ? '2.2rem' : '3.5rem', fontWeight: 900, color: '#fafafa', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: '1rem' }}>
@@ -36,7 +36,7 @@ export const HeroLandingPage: React.FC<HeroLandingPageProps> = ({ onStartDemo })
         </h1>
 
         <p style={{ fontSize: '1.1rem', color: '#a1a1aa', maxWidth: '640px', margin: '0 auto 2rem', lineHeight: 1.6 }}>
-          AutoDocs parses repository AST diffs on webhook push events and generates accurate, production-ready <code style={{ color: '#a78bfa' }}>ARCHITECTURE.md</code> updates directly as GitHub Pull Requests.
+          AutoDocs parses repository diffs on webhook push events and generates accurate, production-ready <code style={{ color: '#a78bfa' }}>ARCHITECTURE.md</code> updates directly as GitHub Pull Requests.
         </p>
 
         {/* Action CTAs */}
@@ -76,8 +76,8 @@ export const HeroLandingPage: React.FC<HeroLandingPageProps> = ({ onStartDemo })
         <div style={{ padding: '1.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: '#34d399', lineHeight: 1.6 }}>
           <div>[00:00.01] ⚡ GitHub Webhook received: push to main (commit sha: e8f9a2b)</div>
           <div>[00:00.24] 📦 Shallow cloning facebook/react @ e8f9a2b...</div>
-          <div>[00:01.44] 🔍 AST diff visitor scanned 14 file modifications</div>
-          <div style={{ color: '#a78bfa' }}>[00:01.88] 🤖 Prompting Gemini 1.5 Pro (sys.docgen.ast-v1.0)...</div>
+          <div>[00:01.44] 🔍 Code diff visitor scanned 14 file modifications</div>
+          <div style={{ color: '#a78bfa' }}>[00:01.88] 🤖 Prompting Gemini 1.5 Pro (sys.docgen.code-v1.0)...</div>
           <div style={{ color: '#fafafa' }}>[00:03.42] ✨ Generated ARCHITECTURE.md updates (28k tokens, 3.42s)</div>
           <div style={{ color: '#60a5fa' }}>[00:03.90] 🚀 GitHub Pull Request #42 opened successfully!</div>
         </div>
@@ -92,7 +92,7 @@ export const HeroLandingPage: React.FC<HeroLandingPageProps> = ({ onStartDemo })
         <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth >= 768 ? 'repeat(3, 1fr)' : '1fr', gap: '1.25rem' }}>
           <div className="glass-panel" style={{ padding: '1.5rem', backgroundColor: '#0c0c0f', borderColor: '#27272a' }}>
             <Code2 size={24} color="#a78bfa" style={{ marginBottom: '0.75rem' }} />
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fafafa', marginBottom: '0.35rem' }}>AST Diff Scanning</h3>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fafafa', marginBottom: '0.35rem' }}>Codebase Diff Scanning</h3>
             <p style={{ fontSize: '0.85rem', color: '#a1a1aa', margin: 0 }}>
               Understands structural code alterations, function signature modifications, and framework routing boundaries.
             </p>
@@ -102,7 +102,7 @@ export const HeroLandingPage: React.FC<HeroLandingPageProps> = ({ onStartDemo })
             <Cpu size={24} color="#34d399" style={{ marginBottom: '0.75rem' }} />
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fafafa', marginBottom: '0.35rem' }}>Multi-Model LLM Engine</h3>
             <p style={{ fontSize: '0.85rem', color: '#a1a1aa', margin: 0 }}>
-              Utilizes Gemini 1.5 Pro for deep AST reasoning and Gemini Flash for rapid classification runs.
+              Utilizes Gemini 1.5 Pro for deep codebase reasoning and Gemini Flash for rapid classification runs.
             </p>
           </div>
 

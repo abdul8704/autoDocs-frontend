@@ -16,7 +16,7 @@ import {
   ChevronRight,
   LogOut,
 } from 'lucide-react';
-import { ActiveScreen, User } from '../types';
+import { ActiveScreen, getNumericCreditBalance, User } from '../types';
 import { CommandPaletteModal } from './CommandPaletteModal';
 
 interface AppShellProps {
@@ -24,22 +24,26 @@ interface AppShellProps {
   onNavigate: (screen: ActiveScreen) => void;
   user: User;
   onLogout?: () => void;
+  isGitHubInstalled?: boolean;
   children: React.ReactNode;
 }
 
-export const AppShell: React.FC<AppShellProps> = ({ currentScreen, onNavigate, user, onLogout, children }) => {
+export const AppShell: React.FC<AppShellProps> = ({ currentScreen, onNavigate, user, onLogout, isGitHubInstalled = true, children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const numericCreditBalance = getNumericCreditBalance(user?.creditBalance);
+
+  const isAdmin = user?.role === 'ADMIN';
 
   const navItems: Array<{ id: ActiveScreen; label: string; icon: React.ReactNode; badge?: string }> = [
     { id: 'dashboard', label: 'Main Dashboard', icon: <LayoutDashboard size={18} /> },
     { id: 'repos', label: 'Repositories Hub', icon: <FolderGit2 size={18} />, badge: '4 Repos' },
     { id: 'jobs', label: 'Jobs & Execution Logs', icon: <Cpu size={18} />, badge: 'Live Stream' },
     { id: 'billing', label: 'Billing & Credit Requests', icon: <CreditCard size={18} /> },
-    { id: 'llm-config', label: 'LLM Task Pipeline Config', icon: <Sliders size={18} /> },
-    { id: 'admin', label: 'Admin Master Console', icon: <ShieldCheck size={18} />, badge: 'Admin' },
-    { id: 'onboarding', label: 'GitHub App Onboarding', icon: <Github size={18} /> },
-    { id: 'hero', label: 'Platform Landing Page', icon: <Sparkles size={18} /> },
+    ...(isAdmin ? [
+      { id: 'llm-config' as ActiveScreen, label: 'LLM Task Pipeline Config', icon: <Sliders size={18} /> },
+      { id: 'admin' as ActiveScreen, label: 'Admin Master Console', icon: <ShieldCheck size={18} />, badge: 'Admin' },
+    ] : []),
   ];
 
   return (
@@ -102,7 +106,11 @@ export const AppShell: React.FC<AppShellProps> = ({ currentScreen, onNavigate, u
                 <button
                   key={item.id}
                   onClick={() => {
-                    onNavigate(item.id);
+                    if (!isGitHubInstalled) {
+                      onNavigate('onboarding');
+                    } else {
+                      onNavigate(item.id);
+                    }
                     setMobileOpen(false);
                   }}
                   style={{
@@ -146,22 +154,27 @@ export const AppShell: React.FC<AppShellProps> = ({ currentScreen, onNavigate, u
 
         {/* Sidebar Footer Widgets */}
         <div style={{ padding: '1rem', borderTop: '1px solid #27272a', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          {/* Active Balance Card Widget */}
+          {/* Active Credit Usage Widget */}
           <div
+            onClick={() => onNavigate('billing')}
             style={{
-              padding: '0.85rem',
+              padding: '0.85rem 1rem',
               borderRadius: '10px',
               backgroundColor: '#121215',
               border: '1px solid #27272a',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-              <span style={{ fontSize: '0.75rem', color: '#a1a1aa', fontWeight: 600 }}>Credit Balance</span>
-              <span style={{ fontSize: '0.75rem', color: '#34d399', fontWeight: 700 }}>{user.creditBalance ?? 45} ⚡ / 100</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Zap size={16} color="#34d399" />
+              <span style={{ fontSize: '0.8rem', color: '#a1a1aa', fontWeight: 600 }}>Credit Usage</span>
             </div>
-            <div style={{ height: '6px', backgroundColor: '#27272a', borderRadius: '3px', overflow: 'hidden' }}>
-              <div style={{ width: `${Math.min(100, Math.max(0, user.creditBalance ?? 45))}%`, height: '100%', background: 'linear-gradient(90deg, #7c3aed, #34d399)' }} />
-            </div>
+            <span style={{ fontSize: '0.9rem', color: '#34d399', fontWeight: 800, fontFamily: 'var(--font-mono)' }}>
+              {numericCreditBalance} ⚡
+            </span>
           </div>
 
           {/* User Profile Footer */}
@@ -282,7 +295,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentScreen, onNavigate, u
               }}
             >
               <Zap size={14} color="#a78bfa" />
-              {user.creditBalance ?? 45} ⚡
+              {numericCreditBalance} ⚡
             </button>
 
             {/* GitHub App Link CTA */}

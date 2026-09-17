@@ -10,13 +10,22 @@ export type ActiveScreen =
   | 'llm-config'
   | 'admin';
 
+export function getNumericCreditBalance(cb: any, fallbackQuotaUsed: number = 0): number {
+  if (typeof cb === 'number' && !isNaN(cb)) return cb;
+  if (cb && typeof cb === 'object' && typeof cb.balance === 'number' && !isNaN(cb.balance)) {
+    return cb.balance;
+  }
+  return Math.max(0, 100 - (fallbackQuotaUsed || 0));
+}
+
 export interface User {
   id: string;
   email: string;
   githubHandle?: string;
   avatarUrl?: string;
   plan: 'FREE' | 'PRO' | 'ENTERPRISE';
-  creditBalance: number;
+  role?: 'ADMIN' | 'USER';
+  creditBalance: number | { balance?: number; [key: string]: any };
   monthlyQuota: number;
   quotaUsed: number;
   githubInstallationId?: number | null;
@@ -45,7 +54,7 @@ export interface ImportedRepo {
   language?: string;
   private: boolean;
   createdAt: string;
-  lastJobStatus?: 'COMPLETED' | 'PR_OPEN' | 'GENERATING' | 'FAILED' | 'IDLE';
+  lastJobStatus?: 'COMPLETED' | 'PR_OPEN' | 'GENERATING' | 'FAILED' | 'IDLE' | 'DROPPED' | 'LLM_JUDGE_REJECTED' | 'MERGED';
   lastRunTime?: string;
   totalRuns?: number;
 }
@@ -55,11 +64,13 @@ export interface DocJob {
   repoId: string;
   repoName: string;
   sha: string;
+  triggerEvent?: string;
   commitMessage?: string;
-  status: 'COMPLETED' | 'PR_OPEN' | 'GENERATING' | 'FAILED' | 'INSUFFICIENT_CREDITS' | 'QUEUED';
+  status: 'PENDING' | 'CLONING' | 'SCANING' | 'GENERATING' | 'COMPLETED' | 'PR_OPEN' | 'FAILED' | 'INSUFFICIENT_CREDITS' | 'QUEUED' | 'DROPPED' | 'LLM_JUDGE_REJECTED' | 'MERGED' | 'WAITING_LLM_JUDGE';
   creditsUsed: number;
   costUsd?: number;
   createdAt: string;
+  displayTime?: string;
   prUrl?: string;
   prNumber?: number;
   latencyMs?: number;
@@ -95,9 +106,12 @@ export interface DashboardStats {
 export interface LedgerTransaction {
   id: string;
   amount: number;
-  type: 'USAGE_DEDUCTION' | 'SIGNUP_GRANT' | 'ADMIN_GRANT' | 'PURCHASE';
+  type: 'USAGE_DEDUCTION' | 'SIGNUP_GRANT' | 'ADMIN_GRANT' | 'ADMIN_TOP_UP' | 'PURCHASE';
   description: string;
   createdAt: string;
+  transactionDate?: string;
+  transactionTime?: string;
+  repoName?: string;
   jobId?: string;
 }
 
@@ -119,6 +133,11 @@ export interface BillingSummary {
   unitCostPerPull: number;
   burnRate7d: number;
   resetDaysRemaining: number;
+  creditsUsedToday?: number;
+  creditsUsed7d?: number;
+  history7d?: Array<{ date: string; fullDate: string; credits: number }>;
+  history28d?: Array<{ date: string; fullDate: string; credits: number }>;
+  historyAllTime?: Array<{ date: string; fullDate: string; credits: number }>;
   ledger: LedgerTransaction[];
   requests: CreditRequest[];
 }
@@ -128,6 +147,7 @@ export interface TaskConfig {
   taskKey: string;
   model: string;
   provider: 'Google' | 'OpenAI' | 'Anthropic';
+  promptTitle?: string;
   promptVersion: string;
   temperature: number;
   maxTokens: number;
@@ -138,11 +158,24 @@ export interface PromptTemplate {
   id: string;
   key: string;
   name: string;
+  promptTitle?: string;
   version: string;
   systemPrompt: string;
   maxOutputTokens: number;
   stopTokens: string[];
   estimatedCostPer1k: number;
+}
+
+export interface ModelRosterItem {
+  id: string;
+  modelName: string;
+  provider: string;
+  contextWindow: number;
+  inputPrice: number;
+  outputPrice: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+  cacheStorageCostPerHour?: number;
 }
 
 export interface AdminStats {
@@ -165,6 +198,7 @@ export interface AdminStats {
     githubHandle?: string;
     avatarUrl?: string;
     plan: string;
+    role?: string;
     creditBalance: number;
     reposCount: number;
     jobsCount: number;

@@ -4,7 +4,9 @@ import {
   BillingSummary,
   DashboardStats,
   DocJob,
+  getNumericCreditBalance,
   ImportedRepo,
+  ModelRosterItem,
   PromptTemplate,
   SearchResults,
   TaskConfig,
@@ -28,6 +30,48 @@ export function getFullApiUrl(endpoint: string): string {
   }
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   return BACKEND_URL ? `${BACKEND_URL}${cleanEndpoint}` : cleanEndpoint;
+}
+
+export function formatFormattedTimestamp(rawDate?: string | Date | number | null): string {
+  if (!rawDate) {
+    const d = new Date();
+    const datePart = d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const timePart = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+    return `${datePart}, ${timePart}`;
+  }
+
+  let d = new Date(rawDate);
+
+  if (isNaN(d.getTime())) {
+    const now = new Date();
+    const str = String(rawDate).toLowerCase();
+    if (str.includes('min')) {
+      const mins = parseInt(str) || 5;
+      now.setMinutes(now.getMinutes() - mins);
+    } else if (str.includes('hour')) {
+      const hours = parseInt(str) || 2;
+      now.setHours(now.getHours() - hours);
+    } else if (str.includes('day')) {
+      const days = parseInt(str) || 1;
+      now.setDate(now.getDate() - days);
+    } else if (str.includes('week')) {
+      const weeks = parseInt(str) || 2;
+      now.setDate(now.getDate() - (weeks * 7));
+    }
+    d = now;
+  }
+
+  const datePart = d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const timePart = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+  return `${datePart}, ${timePart}`;
+}
+
+export function formatDescriptionText(description?: string | null): string {
+  if (!description) return '—';
+  // Replace raw ISO 8601 timestamps (e.g. 2026-09-17T11:35:04.123Z or 2026-09-17T11:35:04Z or 2026-09-17 11:35:04) with human readable date/time
+  return description.replace(/\b\d{4}-\d{2}-\d{2}(?:T|\s+)\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?\b/gi, (match) => {
+    return formatFormattedTimestamp(match);
+  });
 }
 
 let currentAccessToken: string | null = null;
@@ -136,7 +180,8 @@ export async function fetchCurrentUser(): Promise<User | null> {
         githubHandle: u.name || u.email || 'developer',
         avatarUrl: u.profileUrl || `https://avatar.vercel.sh/${u.id}`,
         plan: u.planType || 'FREE',
-        creditBalance: u.creditBalance ?? (100 - (u.usedDocsQuota || 0)),
+        role: u.role || 'USER',
+        creditBalance: getNumericCreditBalance(u.creditBalance, u.usedDocsQuota),
         monthlyQuota: 100,
         quotaUsed: u.usedDocsQuota || 0,
         githubInstallationId: u.githubInstallationId || null,
@@ -146,6 +191,22 @@ export async function fetchCurrentUser(): Promise<User | null> {
     console.warn('[API] fetchCurrentUser unauthenticated:', err);
   }
   return null;
+}
+
+export async function fetchInstallationStatus(): Promise<{ isInstalled: boolean; installationId: number | null; appSlug?: string }> {
+  try {
+    const res = await apiFetch<{ success: boolean; isInstalled?: boolean; installationId?: number | null; appSlug?: string }>('/api/github/installation-status');
+    if (res && res.success) {
+      return {
+        isInstalled: Boolean(res.isInstalled),
+        installationId: res.installationId ?? null,
+        appSlug: res.appSlug || 'aiautodocs',
+      };
+    }
+  } catch (err) {
+    console.warn('[API] fetchInstallationStatus error:', err);
+  }
+  return { isInstalled: false, installationId: null, appSlug: 'aiautodocs' };
 }
 
 // Dashboard & Stats API
@@ -172,7 +233,7 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
         totalJobsExecuted,
         activePipelinesCount,
         openPullRequestsCount,
-        avgLatencySeconds: res.avgLatencySeconds || 3.12,
+        avgLatencySeconds: res.avgLatencySeconds || 0,
         successRatePercent,
         creditsBurnedToday: res.creditsBurnedToday || 0,
         sparkline7d: Array.isArray(res.sparkline7d)
@@ -186,28 +247,24 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
           type: ev.type || 'PUSH',
           repoName: ev.repoName || 'repository',
           message: ev.message || 'Job activity logged',
-          timestamp: ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString() : 'Recently',
+          timestamp: formatFormattedTimestamp(ev.timestamp),
         })),
       };
     }
   } catch (err) {
-    console.warn('[API] fetchDashboardStats using fallback stats:', err);
+    console.warn('[API] fetchDashboardStats error:', err);
   }
   return {
-    importedReposCount: 4,
-    totalJobsExecuted: 1248,
-    activePipelinesCount: 2,
-    openPullRequestsCount: 4,
-    avgLatencySeconds: 3.12,
-    successRatePercent: 98.4,
-    creditsBurnedToday: 18,
-    sparkline7d: [12, 18, 15, 24, 30, 22, 18],
-    recentJobs: mockJobsList,
-    liveEvents: [
-      { id: 'ev-1', type: 'PUSH', repoName: 'facebook/react', message: 'c7a19f2 push to main branch', timestamp: '2 mins ago' },
-      { id: 'ev-2', type: 'PR_OPEN', repoName: 'facebook/react', message: 'PR #42 opened: Sync Architecture Docs', timestamp: '5 mins ago' },
-      { id: 'ev-3', type: 'PR_MERGED', repoName: 'vercel/next.js', message: 'PR #108 merged: Update API Routing Specs', timestamp: '22 mins ago' },
-    ],
+    importedReposCount: 0,
+    totalJobsExecuted: 0,
+    activePipelinesCount: 0,
+    openPullRequestsCount: 0,
+    avgLatencySeconds: 0,
+    successRatePercent: 100,
+    creditsBurnedToday: 0,
+    sparkline7d: [0, 0, 0, 0, 0, 0, 0],
+    recentJobs: [],
+    liveEvents: [],
   };
 }
 
@@ -260,10 +317,10 @@ export async function fetchAccessibleRepos(): Promise<AccessibleRepo[]> {
     const res = await apiFetch<{ success: boolean; repos: any[] }>('/api/github/accessible-repos');
     if (res.success && Array.isArray(res.repos)) {
       return res.repos.map((r: any) => ({
-        id: String(r.id || r.github_repo_id),
-        name: r.name || (r.full_name ? r.full_name.split('/')[1] : r.id),
-        fullName: r.full_name || r.name || String(r.id),
-        private: r.private ?? false,
+        id: String(r.githubRepoId || r.github_repo_id || r.id || ''),
+        name: r.name ? (r.name.includes('/') ? r.name.split('/')[1] : r.name) : (r.full_name ? r.full_name.split('/')[1] : String(r.id)),
+        fullName: r.full_name || r.name || String(r.githubRepoId || r.id),
+        private: r.private ?? r.isPrivate ?? false,
         cloneUrl: r.clone_url || r.cloneUrl || '',
         defaultBranch: r.default_branch || r.defaultBranch || 'main',
         installationId: r.installation_id || r.installationId || 0,
@@ -289,7 +346,7 @@ export async function fetchRepoDetails(repoId: string): Promise<any> {
 }
 
 export async function triggerDocGen(repoId: string): Promise<{ jobId: string; message: string }> {
-  return await apiFetch<{ success: boolean; jobId: string; message: string }>(`/api/repos/${repoId}/generate`, {
+  return await apiFetch<{ success: boolean; jobId: string; message: string }>(`/api/repos/${repoId}/trigger`, {
     method: 'POST',
   });
 }
@@ -303,6 +360,32 @@ export async function fetchRepoDocs(repoId: string): Promise<{ exists: boolean; 
 }
 
 // Jobs & Execution Logs API
+export async function fetchJobsStats(): Promise<{
+  creditsBurnedToday: number;
+  activeRepoHooks: number;
+  docPRsDelivered: number;
+  openPRsCount: number;
+  activeJobsCount: number;
+  actionRequiredCount: number;
+}> {
+  try {
+    const res = await apiFetch<{ success: boolean; stats: any }>('/api/jobs/stats');
+    if (res.success && res.stats) {
+      return res.stats;
+    }
+  } catch (err) {
+    console.warn('[API] fetchJobsStats fallback:', err);
+  }
+  return {
+    creditsBurnedToday: 0,
+    activeRepoHooks: 0,
+    docPRsDelivered: 0,
+    openPRsCount: 0,
+    activeJobsCount: 0,
+    actionRequiredCount: 0,
+  };
+}
+
 export async function fetchJobs(): Promise<DocJob[]> {
   try {
     const res = await apiFetch<{ success: boolean; jobs: any[] }>('/api/jobs');
@@ -326,9 +409,15 @@ export async function fetchJobById(jobId: string): Promise<any> {
 }
 
 export async function retryJob(jobId: string): Promise<any> {
-  return await apiFetch<{ success: boolean; message: string; job: any }>(`/api/jobs/${jobId}/retry`, {
-    method: 'POST',
-  });
+  try {
+    const res = await apiFetch<{ success: boolean; message: string; job: any }>(`/api/jobs/${jobId}/retry`, {
+      method: 'POST',
+    });
+    return res;
+  } catch (err: any) {
+    console.warn('[API] retryJob error:', err);
+    throw new Error(err?.message || 'Failed to retry job. Please check your backend connection.');
+  }
 }
 
 // Billing API
@@ -337,29 +426,40 @@ export async function fetchBillingSummary(): Promise<BillingSummary> {
     const res = await apiFetch<{ success: boolean; balance: any; requests: any[]; ledger: any[] }>('/api/billing/summary');
     if (res.success) {
       return {
-        balance: res.balance?.current ?? 45,
-        tier: res.balance?.tier ? `${res.balance.tier} Tier Active` : 'Free Tier Active',
+        balance: res.balance?.current ?? 0,
+        tier: res.balance?.tier ? `${res.balance.tier} Tier Active` : 'FREE TIER ACTIVE',
         monthlyCap: res.balance?.monthlyCap || 100,
-        usedThisMonth: (res.balance?.monthlyCap || 100) - (res.balance?.current || 45),
+        usedThisMonth: (res.balance?.monthlyCap || 100) - (res.balance?.current || 0),
         unitCostPerPull: 10,
-        burnRate7d: res.balance?.burnRate7d || 10,
+        burnRate7d: res.balance?.creditsUsed7d || 0,
         resetDaysRemaining: 12,
-        ledger: (res.ledger || []).map((l: any) => ({
-          id: l.id,
-          amount: l.amount,
-          type: l.type || 'USAGE_DEDUCTION',
-          description: l.description || '',
-          createdAt: l.createdAt ? new Date(l.createdAt).toLocaleDateString() : 'Recently',
-          jobId: l.jobId,
-        })),
+        creditsUsedToday: res.balance?.creditsUsedToday || 0,
+        creditsUsed7d: res.balance?.creditsUsed7d || 0,
+        history7d: res.balance?.history7d || [],
+        history28d: res.balance?.history28d || [],
+        historyAllTime: res.balance?.historyAllTime || [],
+        ledger: (res.ledger || []).map((l: any) => {
+          const formatted = formatFormattedTimestamp(l.createdAt);
+          return {
+            id: l.id,
+            amount: l.amount,
+            type: l.type || 'USAGE_DEDUCTION',
+            description: formatDescriptionText(l.description || ''),
+            createdAt: l.createdAt || new Date().toISOString(),
+            transactionDate: formatted,
+            transactionTime: formatted,
+            repoName: l.repoName || (l.job?.repository?.full_name || '-'),
+            jobId: l.jobId,
+          };
+        }),
         requests: (res.requests || []).map((r: any) => ({
           id: r.id,
           requestedCredits: r.amount || r.requestedCredits,
-          reason: r.reason || r.description || '',
+          reason: r.reason || r.userReason || r.description || '',
           status: r.status || 'PENDING',
-          grantedCredits: r.grantedAmount,
-          adminNotes: r.adminNotes,
-          createdAt: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recently',
+          grantedCredits: r.amountGranted,
+          adminNotes: r.adminReason,
+          createdAt: formatFormattedTimestamp(r.createdAt),
         })),
       };
     }
@@ -379,14 +479,71 @@ export async function requestCreditGrant(params: { requestedCredits: number; rea
   });
 }
 
+export async function fetchAdminCreditRequests(): Promise<any[]> {
+  try {
+    const res = await apiFetch<{ success: boolean; requests: any[] }>('/api/billing/admin/requests');
+    if (res.success && Array.isArray(res.requests)) {
+      return res.requests.map((r: any) => ({
+        id: r.id,
+        userId: r.userId,
+        userEmail: r.user?.email || 'user@autodocs.io',
+        userName: r.user?.name || r.user?.email || 'User',
+        githubId: r.user?.githubId || null,
+        amountRequested: r.amountRequested || 10,
+        amountGranted: r.amountGranted,
+        reason: r.userReason || r.description || '',
+        adminReason: r.adminReason,
+        status: r.status || 'PENDING',
+        createdAt: formatFormattedTimestamp(r.createdAt),
+      }));
+    }
+  } catch (err) {
+    console.warn('[API] fetchAdminCreditRequests error:', err);
+  }
+  return [];
+}
+
 // Admin API
+export async function fetchAdminUsers(): Promise<any[]> {
+  try {
+    const res = await apiFetch<{ success: boolean; users: any[] }>('/api/admin/users');
+    if (res.success && Array.isArray(res.users)) {
+      return res.users.map((u: any) => ({
+        id: u.id,
+        email: u.email || 'developer@autodocs.io',
+        githubHandle: u.name || u.email?.split('@')[0] || 'user',
+        avatarUrl: u.profileUrl || `https://avatar.vercel.sh/${u.id}`,
+        plan: u.planType || 'FREE',
+        role: u.role || 'USER',
+        creditBalance: getNumericCreditBalance(u.creditBalance, u.usedDocsQuota),
+        reposCount: u.repoCount ?? (u.repos ? u.repos.length : 0),
+        jobsCount: u.importedRepos ? u.importedRepos.reduce((acc: number, r: any) => acc + (r._count?.jobs || 0), 0) : 0,
+        createdAt: u.created_at || new Date().toISOString(),
+      }));
+    }
+  } catch (err) {
+    console.warn('[API] fetchAdminUsers error:', err);
+  }
+  return [];
+}
+
+export async function promoteUserToAdminApi(userId: string): Promise<any> {
+  return await apiFetch<{ success: boolean; message: string; user: any }>(`/api/admin/users/${userId}/promote`, {
+    method: 'POST',
+  });
+}
+
 export async function fetchAdminStats(): Promise<AdminStats> {
   try {
-    const res = await apiFetch<any>('/api/admin/stats');
+    const [res, realUsers] = await Promise.all([
+      apiFetch<any>('/api/admin/stats'),
+      fetchAdminUsers(),
+    ]);
+
     if (res.success && res.overview) {
       const qH = res.queueHealth || {};
       return {
-        totalUsers: res.overview.totalUsers || 0,
+        totalUsers: res.overview.totalUsers || realUsers.length || 0,
         totalReposConnected: res.overview.totalRepos || 0,
         totalDocJobs: res.overview.totalJobs || 0,
         globalLlmSpendUsd: res.overview.globalLlmSpend || 0,
@@ -396,46 +553,151 @@ export async function fetchAdminStats(): Promise<AdminStats> {
           { name: 'push-classify-queue', active: qH.classifyQueue?.active || 0, waiting: qH.classifyQueue?.waiting || 0, completed: qH.classifyQueue?.completed || 0, failed: qH.classifyQueue?.failed || 0, p95LatencyMs: 110 },
           { name: 'doc-generation-queue', active: qH.docGenQueue?.active || 0, waiting: qH.docGenQueue?.waiting || 0, completed: qH.docGenQueue?.completed || 0, failed: qH.docGenQueue?.failed || 0, p95LatencyMs: 3120 },
         ],
-        users: mockAdminStats.users,
+        users: realUsers,
       };
     }
   } catch (err) {
-    console.warn('[API] fetchAdminStats fallback:', err);
+    console.warn('[API] fetchAdminStats error:', err);
   }
-  return mockAdminStats;
+  return {
+    totalUsers: 0,
+    totalReposConnected: 0,
+    totalDocJobs: 0,
+    globalLlmSpendUsd: 0,
+    activeUsersToday: 0,
+    queues: [],
+    users: [],
+  };
+}
+
+
+
+export async function approveCreditRequestApi(requestId: string, amount: number, description?: string): Promise<void> {
+  await apiFetch(`/api/billing/admin/requests/${requestId}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ amount, description }),
+  });
+}
+
+export async function rejectCreditRequestApi(requestId: string, description?: string): Promise<void> {
+  await apiFetch(`/api/billing/admin/requests/${requestId}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ description }),
+  });
 }
 
 // LLM & Task Configuration API
 export async function fetchTaskConfigs(): Promise<TaskConfig[]> {
   try {
-    const res = await apiFetch<{ success: boolean; data: any[] }>('/api/llm-config');
-    if (res.success && Array.isArray(res.data)) {
-      return res.data.map((c: any) => ({
+    const res = await apiFetch<{ success: boolean; configs?: any[]; data?: any[] }>('/api/llm-config');
+    const list = res.configs || res.data;
+    if (res.success && Array.isArray(list)) {
+      return list.map((c: any) => ({
         id: c.id,
         taskKey: c.taskKey,
-        model: c.model?.modelName || 'gemini-1.5-pro',
-        provider: c.model?.provider || 'Google',
-        promptVersion: c.prompt?.key || 'v1.0',
-        temperature: c.temperature || 0.2,
+        model: c.model?.modelName || 'gemini-2.5-flash',
+        provider: (c.model?.provider ? (c.model.provider.charAt(0).toUpperCase() + c.model.provider.slice(1)) : 'Google') as any,
+        promptTitle: c.prompt?.promptTitle || c.prompt?.prompt_key || 'Untitled Prompt',
+        promptVersion: c.prompt?.version || c.prompt?.prompt_key || 'v1.0',
+        temperature: c.temperature ?? 0.2,
         maxTokens: c.maxOutputTokens || 4096,
         status: 'Active',
       }));
     }
   } catch (err) {
-    console.warn('[API] fetchTaskConfigs fallback:', err);
+    console.warn('[API] fetchTaskConfigs error:', err);
   }
-  return mockTaskConfigs;
+  return [];
+}
+
+export async function updateTaskConfigApi(params: {
+  taskKey: string;
+  modelId: string;
+  promptId: string;
+  temperature: number;
+  maxOutputTokens: number;
+}): Promise<void> {
+  await apiFetch('/api/llm-config', {
+    method: 'PUT',
+    body: JSON.stringify(params),
+  });
+}
+
+export async function createTaskConfigApi(params: {
+  taskKey: string;
+  modelId: string;
+  promptId: string;
+  temperature: number;
+  maxOutputTokens: number;
+}): Promise<void> {
+  await apiFetch('/api/llm-config', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
+export async function deleteTaskConfigApi(taskKey: string): Promise<void> {
+  await apiFetch(`/api/llm-config/${taskKey}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function fetchModelsApi(): Promise<ModelRosterItem[]> {
+  try {
+    const res = await apiFetch<{ success?: boolean; models?: any[] }>('/api/models');
+    const list = res.models || (Array.isArray(res) ? res : []);
+    if (Array.isArray(list)) {
+      return list.map((m: any) => ({
+        id: m.id,
+        modelName: m.modelName,
+        provider: m.provider,
+        contextWindow: m.contextWindow || 1048576,
+        inputPrice: m.inputPrice || 0,
+        outputPrice: m.outputPrice || 0,
+        cacheRead: m.cacheRead || 0,
+        cacheWrite: m.cacheWrite || 0,
+        cacheStorageCostPerHour: m.cacheStorageCostPerHour || 0,
+      }));
+    }
+  } catch (err) {
+    console.warn('[API] fetchModelsApi fallback:', err);
+  }
+  return [];
+}
+
+export async function addModelApi(params: {
+  modelName: string;
+  provider: string;
+  contextWindow: number;
+  inputCost: number;
+  outputCost: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+  cacheStorageCostPerHour?: number;
+}): Promise<void> {
+  await apiFetch('/api/models', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
+export async function deleteModelApi(modelId: string): Promise<void> {
+  await apiFetch(`/api/models/${modelId}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function fetchPromptTemplates(): Promise<PromptTemplate[]> {
   try {
-    const res = await apiFetch<{ success: boolean; data: any[] }>('/api/prompts');
-    if (res.success && Array.isArray(res.data)) {
-      return res.data.map((p: any) => ({
+    const res = await apiFetch<any>('/api/prompts');
+    const list = Array.isArray(res) ? res : (res.prompts || res.data || []);
+    if (Array.isArray(list)) {
+      return list.map((p: any) => ({
         id: p.id,
-        key: p.key,
-        name: p.name || p.key,
-        version: 'v1.0',
+        key: p.prompt_key || p.key || p.id,
+        name: p.promptTitle || p.prompt_key || p.name || p.id,
+        promptTitle: p.promptTitle || p.prompt_key || p.name || p.id,
+        version: p.version || 'v1.0',
         systemPrompt: p.content || '',
         maxOutputTokens: 8192,
         stopTokens: ['```end'],
@@ -443,9 +705,42 @@ export async function fetchPromptTemplates(): Promise<PromptTemplate[]> {
       }));
     }
   } catch (err) {
-    console.warn('[API] fetchPromptTemplates fallback:', err);
+    console.warn('[API] fetchPromptTemplates error:', err);
   }
-  return mockPromptTemplates;
+  return [];
+}
+
+export async function updatePromptTemplate(
+  promptId: string,
+  params: { version: string; content: string; promptKey?: string; promptTitle?: string }
+): Promise<void> {
+  await apiFetch(`/api/prompts/${promptId}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      promptId,
+      version: params.version,
+      content: params.content,
+      promptTitle: params.promptTitle,
+    }),
+  });
+}
+
+export async function createPromptTemplate(params: {
+  promptKey: string;
+  version: string;
+  content: string;
+  promptTitle?: string;
+}): Promise<void> {
+  await apiFetch('/api/prompts', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
+export async function deletePromptTemplateApi(promptId: string): Promise<void> {
+  await apiFetch(`/api/prompts/${promptId}`, {
+    method: 'DELETE',
+  });
 }
 
 // Search API
@@ -472,37 +767,37 @@ export async function performGlobalSearch(query: string): Promise<SearchResults>
       { id: 'j-109', sha: 'c7a19f2', repoName: 'vercel/next.js', status: 'PR_OPEN' },
     ],
     docs: [
-      { repoId: 'r-1', repoName: 'facebook/react', path: 'ARCHITECTURE.md', snippet: 'Root React Fiber reconciler & AST AST tree scan...' },
+      { repoId: 'r-1', repoName: 'facebook/react', path: 'ARCHITECTURE.md', snippet: 'Root React Fiber reconciler & codebase tree scan...' },
       { repoId: 'r-2', repoName: 'vercel/next.js', path: 'API_ROUTING.md', snippet: 'App Router layout nesting & server component hydration specs' },
     ],
   };
 }
 
 function mapBackendJobToDocJob(j: any): DocJob {
+  const creditsUsed = typeof j.creditsDeducted === 'number'
+    ? j.creditsDeducted
+    : (typeof j.creditsUsed === 'number' ? j.creditsUsed : 0);
+
+  const rawCreatedAt = j.createdAt ? new Date(j.createdAt).toISOString() : new Date().toISOString();
+  const displayTime = formatFormattedTimestamp(j.createdAt);
+
   return {
     id: j.id,
     repoId: j.repoId || j.repository?.id || '',
     repoName: j.repository?.full_name || j.repoName || 'repository',
-    sha: j.triggerCommit ? j.triggerCommit.slice(0, 7) : 'e8f9a2b',
-    commitMessage: j.commitMessage || `Trigger commit ${j.triggerCommit?.slice(0, 7) || ''}`,
+    sha: j.triggerCommit ? j.triggerCommit.slice(0, 7) : (j.sha || 'HEAD'),
+    triggerEvent: j.triggerCommit ? 'git.push (Webhook)' : 'First Import Sync',
+    commitMessage: j.commitMessage || `Trigger commit ${j.triggerCommit?.slice(0, 7) || 'HEAD'}`,
     status: j.status || 'COMPLETED',
-    creditsUsed: j.creditsDeducted || 10,
-    costUsd: j.tokenBreakdown?.costUsd || 0.025,
-    createdAt: j.createdAt ? new Date(j.createdAt).toLocaleTimeString() : 'Recently',
-    prUrl: j.prLink || undefined,
-    prNumber: j.pullRequestId || undefined,
-    latencyMs: j.tokenBreakdown?.durationMs || 3000,
-    modelUsed: 'gemini-1.5-pro',
-    tokenBreakdown: j.tokenBreakdown ? {
-      prompt: j.tokenBreakdown.promptTokens || 0,
-      cached: j.tokenBreakdown.cachedTokens || 0,
-      input: j.tokenBreakdown.inputTokens || 0,
-      output: j.tokenBreakdown.outputTokens || 0,
-    } : undefined,
-    logs: j.stdoutLogs || [
-      `Job ${j.id} initialized for repo ${j.repository?.full_name || ''}`,
-      `Status: ${j.status}`,
-    ],
+    creditsUsed,
+    costUsd: j.tokenBreakdown?.costUsd || 0,
+    createdAt: rawCreatedAt,
+    displayTime,
+    prUrl: j.prLink || j.prUrl || undefined,
+    prNumber: j.pullRequestId || j.prNumber || undefined,
+    latencyMs: j.tokenBreakdown?.durationMs || 0,
+    modelUsed: j.modelUsed || 'gemini-2.5-flash',
+    logs: j.stdoutLogs || [],
   };
 }
 
@@ -624,8 +919,8 @@ export const mockJobsList: DocJob[] = [
     logs: [
       '[00:00.01] GitHub Webhook signature verified (event: push)',
       '[00:00.24] Cloned commit e8f9a2b (shallow depth 1)',
-      '[00:01.44] AST diff scanner extracted 14 file changes',
-      '[00:01.88] Dispatched prompt sys.docgen.ast-v1.0 to Gemini 1.5 Pro',
+      '[00:01.44] Code diff scanner extracted 14 file changes',
+      '[00:01.88] Dispatched prompt sys.docgen.code-v1.0 to Gemini 1.5 Pro',
       '[00:03.42] Generated ARCHITECTURE.md diff successfully',
       '[00:03.90] Pull Request #42 opened on GitHub',
     ],
@@ -696,7 +991,7 @@ export const mockBillingSummary: BillingSummary = {
     { id: 'tx-098', amount: 20, type: 'SIGNUP_GRANT', description: 'Initial account activation grant', createdAt: '2 weeks ago' },
   ],
   requests: [
-    { id: 'req-1', requestedCredits: 20, reason: 'Benchmarking large enterprise repo AST scan', status: 'PENDING', createdAt: '1 hour ago' },
+    { id: 'req-1', requestedCredits: 20, reason: 'Benchmarking large enterprise repo codebase scan', status: 'PENDING', createdAt: '1 hour ago' },
     { id: 'req-2', requestedCredits: 30, reason: 'Initial onboarding pilot project', status: 'APPROVED', grantedCredits: 30, adminNotes: 'Approved for onboarding pilot', createdAt: '3 days ago' },
   ],
 };
@@ -710,10 +1005,10 @@ export const mockTaskConfigs: TaskConfig[] = [
 export const mockPromptTemplates: PromptTemplate[] = [
   {
     id: 'pt-1',
-    key: 'sys.docgen.ast-v1.0',
-    name: 'AST Architecture Generator Prompt',
+    key: 'sys.docgen.code-v1.0',
+    name: 'Architecture Generator Prompt',
     version: 'v1.0',
-    systemPrompt: `You are AutoDocs AI, a senior software architect. Given the AST diff tree and file list for {{repo_name}}, generate a concise, production-grade ARCHITECTURE.md update in Markdown syntax.`,
+    systemPrompt: `You are AutoDocs AI, a senior software architect. Given the codebase diff tree and file list for {{repo_name}}, generate a concise, production-grade ARCHITECTURE.md update in Markdown syntax.`,
     maxOutputTokens: 8192,
     stopTokens: ['```end'],
     estimatedCostPer1k: 0.0025,
@@ -721,7 +1016,7 @@ export const mockPromptTemplates: PromptTemplate[] = [
   {
     id: 'pt-2',
     key: 'sys.judge.diff-v2.0',
-    name: 'AST Diff Impact Classifier',
+    name: 'Code Diff Impact Classifier',
     version: 'v2.0',
     systemPrompt: `Evaluate whether the provided git commit contains architectural or documentation-impacting code changes. Return JSON: { "shouldGenerate": boolean, "impactScore": number }`,
     maxOutputTokens: 1024,

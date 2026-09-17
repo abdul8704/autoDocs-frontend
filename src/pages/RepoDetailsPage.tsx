@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Play, GitBranch, GitCommit, CheckCircle2, FileText, Cpu, Copy, Check } from 'lucide-react';
-import { fetchRepoDetails, fetchRepoDocs, triggerDocGen } from '../services/api';
+import { ArrowLeft, Play, GitBranch, GitCommit, FileText, Cpu, Copy, Check, ExternalLink } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import { fetchRepoDetails, fetchRepoDocs, triggerDocGen, formatFormattedTimestamp } from '../services/api';
+import { PipelineTimeline } from '../components/PipelineTimeline';
 
 interface RepoDetailsPageProps {
   repoId: string;
@@ -38,7 +40,7 @@ This repository documentation is automatically generated and synchronized on eve
 
 \`\`\`mermaid
 graph TD
-    A[Git Push Webhook] --> B[AST Visitor Scanner]
+    A[Git Push Webhook] --> B[Codebase Diff Scanner]
     B --> C[Gemini LLM Engine]
     C --> D[Pull Request Sync]
 \`\`\`
@@ -56,7 +58,7 @@ graph TD
     setTriggering(true);
     try {
       const res = await triggerDocGen(repoId);
-      alert(res.message || 'Manual AST Doc Generation queued successfully!');
+      alert(res.message || 'Manual Doc Generation queued successfully!');
       await loadData();
     } catch (err) {
       alert(`Trigger error: ${(err as Error).message}`);
@@ -70,6 +72,13 @@ graph TD
   const lastCommit = repoData?.repo?.last_processed_commit?.slice(0, 7) || 'e8f9a2b';
   const status = repoData?.repo?.sync_status || 'Synchronized';
   const jobsList = repoData?.repo?.jobs || [];
+  const latestJob = repoData?.latestJob || jobsList[0] || null;
+
+  const completedJobsCount =
+    repoData?.stats?.completedJobs ??
+    jobsList.filter((j: any) => j.status === 'COMPLETED' || j.status === 'PR_OPEN' || j.status === 'MERGED').length;
+
+  const totalJobsCount = repoData?.stats?.totalJobs ?? jobsList.length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -99,32 +108,13 @@ graph TD
           </div>
         </div>
 
-        {/* 5-Step Pipeline Stepper Bar */}
-        <div style={{ paddingTop: '1rem', borderTop: '1px solid #1e1e22', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.5rem' }}>
-          {[
-            { step: '1. Webhook Recv', time: '240ms (200 OK)' },
-            { step: '2. Git Checkout', time: '1.2s (shallow)' },
-            { step: '3. AST Diff Scan', time: 'Completed' },
-            { step: '4. Gemini Engine', time: '4.8s (28k tokens)' },
-            { step: '5. GitHub PR Sync', time: 'Ready for review' },
-          ].map((item, idx) => (
-            <div
-              key={idx}
-              style={{
-                padding: '0.5rem 0.75rem',
-                backgroundColor: '#121215',
-                border: '1px solid #27272a',
-                borderRadius: '8px',
-                fontSize: '0.75rem',
-              }}
-            >
-              <div style={{ fontWeight: 700, color: '#fafafa', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                <CheckCircle2 size={12} color="#34d399" /> {item.step}
-              </div>
-              <div style={{ color: '#71717a', fontSize: '0.7rem', marginTop: '0.15rem' }}>{item.time}</div>
-            </div>
-          ))}
-        </div>
+        {/* Dynamic Pipeline Timeline Stepper */}
+        <PipelineTimeline
+          isFirstTime={latestJob?.isFirstTime ?? false}
+          status={latestJob?.status || 'COMPLETED'}
+          reasoning={latestJob?.judgeReasoning || latestJob?.errorLog}
+          prLink={latestJob?.prLink}
+        />
       </div>
 
       {/* 70 / 30 SPLIT LAYOUT */}
@@ -142,8 +132,8 @@ graph TD
           </div>
 
           {/* Rendered Markdown Body Container */}
-          <div style={{ color: '#fafafa', lineHeight: 1.7, fontSize: '0.9rem', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)' }}>
-            {activeContent}
+          <div style={{ color: '#fafafa', lineHeight: 1.7, fontSize: '0.9rem' }}>
+            <ReactMarkdown>{activeContent}</ReactMarkdown>
           </div>
         </div>
 
@@ -152,10 +142,10 @@ graph TD
           <div className="glass-panel" style={{ padding: '1.25rem', backgroundColor: '#0c0c0f', borderColor: '#27272a' }}>
             <div style={{ fontSize: '0.8rem', color: '#71717a', fontWeight: 600 }}>Total Repository Jobs</div>
             <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#34d399', margin: '0.25rem 0' }}>
-              {repoData?.stats?.completedJobs ?? jobsList.length} Completed
+              {completedJobsCount} Completed
             </div>
             <div style={{ fontSize: '0.8rem', color: '#a78bfa', fontWeight: 700 }}>
-              {repoData?.stats?.totalJobs ?? jobsList.length} Total Runs
+              {totalJobsCount} Total Runs
             </div>
           </div>
 
@@ -165,30 +155,83 @@ graph TD
             </h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {(jobsList.length > 0 ? jobsList : [
-                { id: 'j-108', status: 'PR_OPEN', triggerCommit: 'e8f9a2b', createdAt: 'Recently' },
-                { id: 'j-107', status: 'COMPLETED', triggerCommit: 'c7a19f2', createdAt: 'Earlier' },
-              ]).map((run: any) => (
-                <div
-                  key={run.id}
-                  style={{
-                    padding: '0.75rem',
-                    backgroundColor: '#121215',
-                    border: '1px solid #27272a',
-                    borderRadius: '8px',
-                    fontSize: '0.8rem',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                    <span style={{ fontWeight: 700, color: '#fafafa', fontFamily: 'var(--font-mono)' }}>{run.id.slice(0, 8)}</span>
-                    <span className="badge badge-purple">{run.status}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#71717a', fontSize: '0.75rem' }}>
-                    <span>SHA: {run.triggerCommit ? run.triggerCommit.slice(0, 7) : 'HEAD'}</span>
-                    <span style={{ color: '#34d399', fontWeight: 600 }}>10 ⚡</span>
-                  </div>
-                </div>
-              ))}
+              {jobsList.length === 0 ? (
+                <div style={{ color: '#71717a', fontSize: '0.8rem' }}>No execution history available for this repo yet.</div>
+              ) : (
+                jobsList.map((run: any) => {
+                  const isFailed = run.status === 'FAILED';
+                  const isSuccess = run.status === 'PR_OPEN' || run.status === 'COMPLETED' || run.status === 'MERGED';
+                  const isDropped = run.status === 'DROPPED' || run.status === 'LLM_JUDGE_REJECTED';
+                  const prUrl = run.prLink || run.prUrl;
+                  const prNumber = run.pullRequestId || run.prNumber;
+
+                  return (
+                    <div
+                      key={run.id}
+                      style={{
+                        padding: '0.75rem',
+                        backgroundColor: '#121215',
+                        border: '1px solid #27272a',
+                        borderRadius: '8px',
+                        fontSize: '0.8rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                        <span style={{ fontWeight: 700, color: '#fafafa', fontFamily: 'var(--font-mono)' }}>#{run.id.slice(0, 8)}</span>
+                        <span
+                          className={`badge ${
+                            isSuccess
+                              ? 'badge-success'
+                              : isFailed
+                              ? 'badge-danger'
+                              : isDropped
+                              ? 'badge-warning'
+                              : 'badge-neutral'
+                          }`}
+                        >
+                          {run.status}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#71717a', fontSize: '0.75rem' }}>
+                        <span>SHA: {run.triggerCommit ? run.triggerCommit.slice(0, 7) : run.sha ? run.sha.slice(0, 7) : 'HEAD'}</span>
+                        {isSuccess && (
+                          <span style={{ color: '#34d399', fontWeight: 600 }}>
+                            {run.creditsUsed !== null && run.creditsUsed !== undefined ? `${run.creditsUsed} ⚡` : '10 ⚡'}
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ fontSize: '0.7rem', color: '#52525b', marginTop: '0.2rem', fontFamily: 'var(--font-mono)' }}>
+                        {formatFormattedTimestamp(run.createdAt)}
+                      </div>
+
+                      {prUrl && (
+                        <div style={{ marginTop: '0.4rem', paddingTop: '0.4rem', borderTop: '1px solid #1e1e22', display: 'flex', justifyContent: 'flex-end' }}>
+                          <a
+                            href={prUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn btn-secondary"
+                            style={{
+                              padding: '0.25rem 0.6rem',
+                              fontSize: '0.75rem',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
+                              color: '#a78bfa',
+                              borderColor: 'rgba(167, 139, 250, 0.3)',
+                              backgroundColor: 'rgba(167, 139, 250, 0.1)',
+                            }}
+                          >
+                            Review PR {prNumber ? `#${prNumber}` : ''} <ExternalLink size={12} />
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>

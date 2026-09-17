@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ActiveScreen, User } from './types';
-import { fetchCurrentUser, logoutUser, refreshAccessToken } from './services/api';
+import { fetchCurrentUser, fetchInstallationStatus, logoutUser, refreshAccessToken } from './services/api';
 import { AppShell } from './components/AppShell';
 
 // Page Components
@@ -20,6 +20,7 @@ export const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<ActiveScreen>('dashboard');
   const [selectedRepoId, setSelectedRepoId] = useState<string>('repo-1');
   const [loading, setLoading] = useState<boolean>(true);
+  const [isGitHubInstalled, setIsGitHubInstalled] = useState<boolean | null>(null);
 
   useEffect(() => {
     refreshAccessToken()
@@ -29,15 +30,25 @@ export const App: React.FC = () => {
         }
         return null;
       })
-      .then((userData) => {
+      .then(async (userData) => {
         setUser(userData);
-        if (userData && window.location.search) {
-          window.history.replaceState({}, document.title, window.location.pathname);
+        if (userData) {
+          if (window.location.search) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+          const status = await fetchInstallationStatus();
+          setIsGitHubInstalled(status.isInstalled);
+          if (!status.isInstalled) {
+            setCurrentScreen('onboarding');
+          }
+        } else {
+          setIsGitHubInstalled(null);
         }
       })
       .catch((err) => {
         console.warn('[App] Init auth failed:', err);
         setUser(null);
+        setIsGitHubInstalled(null);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -45,6 +56,7 @@ export const App: React.FC = () => {
   const handleLogout = async () => {
     await logoutUser();
     setUser(null);
+    setIsGitHubInstalled(null);
     setCurrentScreen('auth');
   };
 
@@ -84,30 +96,48 @@ export const App: React.FC = () => {
     );
   }
 
-  // Strictly block unauthenticated users from seeing AppShell / Dashboard
+  // Strictly block unauthenticated users from seeing AppShell / Dashboard. Default unauthenticated view is Hero Landing Page.
   if (!user) {
-    if (currentScreen === 'hero') {
-      return <HeroLandingPage onStartDemo={() => setCurrentScreen('auth')} />;
+    if (currentScreen === 'auth') {
+      return (
+        <AuthPage
+          onLoginSuccess={async (demoUser) => {
+            if (demoUser) {
+              setUser(demoUser);
+            } else {
+              const fetchedUser = await fetchCurrentUser();
+              setUser(fetchedUser);
+            }
+            const status = await fetchInstallationStatus();
+            setIsGitHubInstalled(status.isInstalled);
+            if (!status.isInstalled) {
+              setCurrentScreen('onboarding');
+            } else {
+              setCurrentScreen('dashboard');
+            }
+          }}
+        />
+      );
     }
-    return (
-      <AuthPage
-        onLoginSuccess={(demoUser) => {
-          if (demoUser) {
-            setUser(demoUser);
-          }
-          setCurrentScreen('dashboard');
-        }}
-      />
-    );
+    return <HeroLandingPage onStartDemo={() => setCurrentScreen('auth')} />;
   }
+
+  const effectiveScreen: ActiveScreen = isGitHubInstalled === false ? 'onboarding' : currentScreen;
 
   // Render Page Content inside App Shell for authenticated users
   const renderScreen = () => {
-    switch (currentScreen) {
+    switch (effectiveScreen) {
       case 'hero':
         return <HeroLandingPage onStartDemo={() => setCurrentScreen('onboarding')} />;
       case 'onboarding':
-        return <GitHubOnboardingPage onComplete={() => setCurrentScreen('repos')} />;
+        return (
+          <GitHubOnboardingPage
+            onComplete={() => {
+              setIsGitHubInstalled(true);
+              setCurrentScreen('dashboard');
+            }}
+          />
+        );
       case 'repos':
         return (
           <RepositoriesHubPage
@@ -122,11 +152,17 @@ export const App: React.FC = () => {
       case 'jobs':
         return <JobsLogsPage />;
       case 'admin':
-        return <AdminDashboardPage />;
+        if (user.role !== 'ADMIN') {
+          return <MainDashboardPage onNavigate={(s) => setCurrentScreen(s as ActiveScreen)} user={user} />;
+        }
+        return <AdminDashboardPage onNavigate={(s) => setCurrentScreen(s as ActiveScreen)} />;
       case 'billing':
         return <BillingPage />;
       case 'llm-config':
-        return <LLMConfigPage />;
+        if (user.role !== 'ADMIN') {
+          return <MainDashboardPage onNavigate={(s) => setCurrentScreen(s as ActiveScreen)} user={user} />;
+        }
+        return <LLMConfigPage user={user} onNavigate={(s) => setCurrentScreen(s as ActiveScreen)} />;
       case 'dashboard':
       default:
         return <MainDashboardPage onNavigate={(s) => setCurrentScreen(s as ActiveScreen)} user={user} />;
@@ -134,7 +170,13 @@ export const App: React.FC = () => {
   };
 
   return (
-    <AppShell currentScreen={currentScreen} onNavigate={setCurrentScreen} user={user} onLogout={handleLogout}>
+    <AppShell
+      currentScreen={effectiveScreen}
+      onNavigate={setCurrentScreen}
+      user={user}
+      onLogout={handleLogout}
+      isGitHubInstalled={isGitHubInstalled ?? true}
+    >
       {renderScreen()}
     </AppShell>
   );

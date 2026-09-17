@@ -60,7 +60,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
           AutoDocs AI Portal
         </h1>
         <p style={{ fontSize: '0.9rem', color: '#a1a1aa', marginBottom: '1.5rem' }}>
-          Zero manual synced docs. Autonomous AST documentation generation on every git commit.
+          Zero manual synced docs. Autonomous documentation generation on every git commit.
         </p>
 
         {oauthError && (
