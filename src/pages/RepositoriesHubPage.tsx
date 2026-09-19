@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { FolderGit2, Plus, Search, RefreshCw, ExternalLink, Play, Trash2, Shield, ArrowRight } from 'lucide-react';
 import { AccessibleRepo, ImportedRepo } from '../types';
 import { fetchAccessibleRepos, fetchImportedRepos, importRepository, deleteImportedRepository, formatFormattedTimestamp } from '../services/api';
+import { toast } from '../components/Toast';
 
 interface RepositoriesHubPageProps {
   onSelectRepo: (repoId: string) => void;
@@ -49,7 +50,7 @@ export const RepositoriesHubPage: React.FC<RepositoriesHubPageProps> = ({ onSele
       });
       await loadData();
     } catch (err) {
-      alert(`Import error: ${(err as Error).message}`);
+      toast.error(`Import error: ${(err as Error).message}`);
     } finally {
       setImportingRepoId(null);
     }
@@ -61,7 +62,7 @@ export const RepositoriesHubPage: React.FC<RepositoriesHubPageProps> = ({ onSele
       await deleteImportedRepository(repoId);
       await loadData();
     } catch (err) {
-      alert(`Delete error: ${(err as Error).message}`);
+      toast.error(`Delete error: ${(err as Error).message}`);
     }
   };
 
@@ -208,29 +209,18 @@ export const RepositoriesHubPage: React.FC<RepositoriesHubPageProps> = ({ onSele
             </thead>
             <tbody>
               {importedLoading ? (
-                Array.from({ length: 3 }).map((_, idx) => (
-                  <tr key={idx} style={{ borderBottom: '1px solid #1e1e22' }}>
-                    <td style={{ padding: '1rem 1.25rem' }}>
-                      <div style={{ width: '160px', height: '18px', backgroundColor: '#1e1e22', borderRadius: '4px', marginBottom: '0.4rem', animation: 'pulse 1.5s infinite' }} />
-                      <div style={{ width: '100px', height: '12px', backgroundColor: '#141418', borderRadius: '4px', animation: 'pulse 1.5s infinite' }} />
-                    </td>
-                    <td style={{ padding: '1rem' }}>
-                      <div style={{ width: '70px', height: '22px', backgroundColor: '#1e1e22', borderRadius: '9999px', animation: 'pulse 1.5s infinite' }} />
-                    </td>
-                    <td style={{ padding: '1rem' }}>
-                      <div style={{ width: '90px', height: '22px', backgroundColor: '#1e1e22', borderRadius: '9999px', animation: 'pulse 1.5s infinite' }} />
-                    </td>
-                    <td style={{ padding: '1rem' }}>
-                      <div style={{ width: '60px', height: '16px', backgroundColor: '#1e1e22', borderRadius: '4px', animation: 'pulse 1.5s infinite' }} />
-                    </td>
-                    <td style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                        <div style={{ width: '70px', height: '30px', backgroundColor: '#1e1e22', borderRadius: '6px', animation: 'pulse 1.5s infinite' }} />
-                        <div style={{ width: '32px', height: '30px', backgroundColor: '#1e1e22', borderRadius: '6px', animation: 'pulse 1.5s infinite' }} />
+                <tr>
+                  <td colSpan={5}>
+                    <div className="theme-spinner-container">
+                      <div className="theme-spinner-ring">
+                        <div className="theme-spinner-inner">
+                          <FolderGit2 size={20} color="#a78bfa" />
+                        </div>
                       </div>
-                    </td>
-                  </tr>
-                ))
+                      <div className="theme-spinner-text">Loading Connected Repositories...</div>
+                    </div>
+                  </td>
+                </tr>
               ) : imported.length === 0 ? (
                 <tr>
                   <td colSpan={5} style={{ padding: '2rem', textAlign: 'center', color: '#71717a', fontSize: '0.9rem' }}>
@@ -311,23 +301,18 @@ export const RepositoriesHubPage: React.FC<RepositoriesHubPageProps> = ({ onSele
             </thead>
             <tbody>
               {accessibleLoading ? (
-                Array.from({ length: 3 }).map((_, idx) => (
-                  <tr key={idx} style={{ borderBottom: '1px solid #1e1e22' }}>
-                    <td style={{ padding: '1rem 1.25rem' }}>
-                      <div style={{ width: '180px', height: '18px', backgroundColor: '#1e1e22', borderRadius: '4px', marginBottom: '0.4rem', animation: 'pulse 1.5s infinite' }} />
-                      <div style={{ width: '80px', height: '12px', backgroundColor: '#141418', borderRadius: '4px', animation: 'pulse 1.5s infinite' }} />
-                    </td>
-                    <td style={{ padding: '1rem' }}>
-                      <div style={{ width: '50px', height: '16px', backgroundColor: '#1e1e22', borderRadius: '4px', animation: 'pulse 1.5s infinite' }} />
-                    </td>
-                    <td style={{ padding: '1rem' }}>
-                      <div style={{ width: '70px', height: '22px', backgroundColor: '#1e1e22', borderRadius: '9999px', animation: 'pulse 1.5s infinite' }} />
-                    </td>
-                    <td style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>
-                      <div style={{ display: 'inline-block', width: '130px', height: '32px', backgroundColor: '#1e1e22', borderRadius: '6px', animation: 'pulse 1.5s infinite' }} />
-                    </td>
-                  </tr>
-                ))
+                <tr>
+                  <td colSpan={4}>
+                    <div className="theme-spinner-container">
+                      <div className="theme-spinner-ring">
+                        <div className="theme-spinner-inner">
+                          <Plus size={20} color="#34d399" />
+                        </div>
+                      </div>
+                      <div className="theme-spinner-text">Fetching Available GitHub App Repositories...</div>
+                    </div>
+                  </td>
+                </tr>
               ) : filteredAccessible.length === 0 ? (
                 <tr>
                   <td colSpan={4} style={{ padding: '2rem', textAlign: 'center', color: '#71717a', fontSize: '0.9rem' }}>

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Plus, Zap, TrendingUp, Clock, GitBranch, Calendar } from 'lucide-react';
 import { BillingSummary } from '../types';
 import { fetchBillingSummary, requestCreditGrant, formatFormattedTimestamp, formatDescriptionText } from '../services/api';
+import { toast } from '../components/Toast';
 
 export const BillingPage: React.FC = () => {
   const [data, setData] = useState<BillingSummary | null>(null);
@@ -22,17 +23,17 @@ export const BillingPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reason.trim()) {
-      alert('Please provide a reason for the credit grant request.');
+      toast.warning('Please provide a reason for the credit grant request.');
       return;
     }
     setSubmitting(true);
     try {
       await requestCreditGrant({ requestedCredits: creditsNeeded, reason });
-      alert('Credit grant request submitted successfully!');
+      toast.success('Credit grant request submitted successfully!');
       setReason('');
       loadData();
     } catch (err) {
-      alert(`Request error: ${(err as Error).message}`);
+      toast.error(`Request error: ${(err as Error).message}`);
     } finally {
       setSubmitting(false);
     }
@@ -290,7 +291,7 @@ export const BillingPage: React.FC = () => {
               cursor: 'pointer',
             }}
           >
-            Immutable Credit Ledger ({data.ledger.length})
+            Credit Ledger ({data.ledger.length})
           </button>
           <button
             onClick={() => setActiveTab('requests')}

@@ -19,6 +19,8 @@ import {
 import { ActiveScreen, getNumericCreditBalance, User } from '../types';
 import { CommandPaletteModal } from './CommandPaletteModal';
 
+import logoImg from '../assets/logo.svg';
+
 interface AppShellProps {
   currentScreen: ActiveScreen;
   onNavigate: (screen: ActiveScreen) => void;
@@ -70,25 +72,22 @@ export const AppShell: React.FC<AppShellProps> = ({ currentScreen, onNavigate, u
           {/* Brand Logo Header */}
           <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #27272a', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }} onClick={() => onNavigate('dashboard')}>
-              <div
+              <img
+                src={logoImg}
+                alt="AutoDocs Logo"
                 style={{
                   width: '36px',
                   height: '36px',
                   borderRadius: '10px',
-                  background: 'linear-gradient(135deg, #7c3aed 0%, #34d399 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
                   boxShadow: '0 0 15px rgba(124, 58, 237, 0.4)',
+                  objectFit: 'contain',
                 }}
-              >
-                <Zap size={20} color="#ffffff" />
-              </div>
+              />
               <div>
                 <h1 style={{ fontSize: '1.1rem', fontWeight: 800, letterSpacing: '-0.02em', margin: 0, color: '#fafafa' }}>
                   AutoDocs
                 </h1>
-                <span style={{ fontSize: '0.7rem', color: '#34d399', fontWeight: 600 }}>v1.0 Autonomous</span>
+                <span style={{ fontSize: '0.7rem', color: '#34d399', fontWeight: 600 }}>v1.0</span>
               </div>
             </div>
             {mobileOpen && (
@@ -189,7 +188,6 @@ export const AppShell: React.FC<AppShellProps> = ({ currentScreen, onNavigate, u
                 <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fafafa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {user.githubHandle || user.email}
                 </div>
-                <div style={{ fontSize: '0.7rem', color: '#34d399', fontWeight: 600 }}>{user.plan} Plan</div>
               </div>
             </div>
             {onLogout && (
@@ -271,12 +269,6 @@ export const AppShell: React.FC<AppShellProps> = ({ currentScreen, onNavigate, u
 
           {/* Header Action Items */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            {/* Live Webhook Status Indicator */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(52, 211, 153, 0.1)', border: '1px solid rgba(52, 211, 153, 0.3)', padding: '0.25rem 0.6rem', borderRadius: '9999px', fontSize: '0.75rem', color: '#34d399', fontWeight: 600 }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#34d399', animation: 'pulse 1.5s infinite' }} />
-              Live Webhooks
-            </div>
-
             {/* Credit Balance Pill */}
             <button
               onClick={() => onNavigate('billing')}

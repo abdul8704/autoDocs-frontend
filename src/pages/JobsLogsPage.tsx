@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { DocJob } from '../types';
 import { fetchJobs, fetchJobsStats, retryJob, formatFormattedTimestamp } from '../services/api';
+import { toast } from '../components/Toast';
 
 interface JobStatsState {
   creditsBurnedToday: number;
@@ -54,10 +55,10 @@ export const JobsLogsPage: React.FC = () => {
     setRetryingJobId(jobId);
     try {
       await retryJob(jobId);
-      alert(`Job #${jobId.slice(0, 8)} re-queued successfully!`);
+      toast.success(`Job #${jobId.slice(0, 8)} re-queued successfully!`);
       loadData();
     } catch (err) {
-      alert(`Retry error: ${(err as Error).message || err}`);
+      toast.error(`Retry error: ${(err as Error).message || err}`);
     } finally {
       setRetryingJobId(null);
     }

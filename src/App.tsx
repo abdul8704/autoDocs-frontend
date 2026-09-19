@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActiveScreen, User } from './types';
 import { fetchCurrentUser, fetchInstallationStatus, logoutUser, refreshAccessToken } from './services/api';
 import { AppShell } from './components/AppShell';
+import { ToastContainer } from './components/Toast';
 
 // Page Components
 import { AuthPage } from './pages/AuthPage';
@@ -170,15 +171,18 @@ export const App: React.FC = () => {
   };
 
   return (
-    <AppShell
-      currentScreen={effectiveScreen}
-      onNavigate={setCurrentScreen}
-      user={user}
-      onLogout={handleLogout}
-      isGitHubInstalled={isGitHubInstalled ?? true}
-    >
-      {renderScreen()}
-    </AppShell>
+    <>
+      <ToastContainer />
+      <AppShell
+        currentScreen={effectiveScreen}
+        onNavigate={setCurrentScreen}
+        user={user}
+        onLogout={handleLogout}
+        isGitHubInstalled={isGitHubInstalled ?? true}
+      >
+        {renderScreen()}
+      </AppShell>
+    </>
   );
 };
 

@@ -14,6 +14,7 @@ import {
   updatePromptTemplate,
   updateTaskConfigApi,
 } from '../services/api';
+import { toast } from '../components/Toast';
 
 interface LLMConfigPageProps {
   user?: User | null;
@@ -32,12 +33,12 @@ export const LLMConfigPage: React.FC<LLMConfigPageProps> = ({ user, onNavigate }
     name: string;
     associatedTaskKeys: string[];
   } | null>(null);
-  
+
   const [selectedPrompt, setSelectedPrompt] = useState<PromptTemplate | null>(null);
   const [promptTitle, setPromptTitle] = useState<string>('');
   const [promptText, setPromptText] = useState<string>('');
   const [promptVersion, setPromptVersion] = useState<string>('v1.0');
-  
+
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -136,7 +137,7 @@ export const LLMConfigPage: React.FC<LLMConfigPageProps> = ({ user, onNavigate }
       notifySuccess(`Prompt "${promptTitle || selectedPrompt.key}" saved & deployed!`);
       await loadData();
     } catch (err) {
-      alert(`Failed to save prompt: ${(err as Error).message}`);
+      toast.error(`Failed to save prompt: ${(err as Error).message}`);
     } finally {
       setSaving(false);
     }
@@ -179,14 +180,14 @@ export const LLMConfigPage: React.FC<LLMConfigPageProps> = ({ user, onNavigate }
           associatedTaskKeys: boundConfigs.length > 0 ? boundConfigs.map((c) => c.taskKey) : ['associated tasks'],
         });
       } else {
-        alert(`Failed to delete prompt: ${err?.message || String(err)}`);
+        toast.error(`Failed to delete prompt: ${err?.message || String(err)}`);
       }
     }
   };
 
   const handleSaveTaskConfig = async () => {
     if (!configModelId || !configPromptId) {
-      alert('Please select a model and prompt template.');
+      toast.warning('Please select a model and prompt template.');
       return;
     }
     setSaving(true);
@@ -213,7 +214,7 @@ export const LLMConfigPage: React.FC<LLMConfigPageProps> = ({ user, onNavigate }
       setShowConfigModal(false);
       await loadData();
     } catch (err) {
-      alert(`Failed to save task config: ${(err as Error).message}`);
+      toast.error(`Failed to save task config: ${(err as Error).message}`);
     } finally {
       setSaving(false);
     }
@@ -226,13 +227,13 @@ export const LLMConfigPage: React.FC<LLMConfigPageProps> = ({ user, onNavigate }
       notifySuccess(`Task binding "${taskKey}" deleted.`);
       await loadData();
     } catch (err) {
-      alert(`Failed to delete task config: ${(err as Error).message}`);
+      toast.error(`Failed to delete task config: ${(err as Error).message}`);
     }
   };
 
   const handleAddModel = async () => {
     if (!newModelName.trim()) {
-      alert('Model name is required.');
+      toast.warning('Model name is required.');
       return;
     }
     setSaving(true);
@@ -252,7 +253,7 @@ export const LLMConfigPage: React.FC<LLMConfigPageProps> = ({ user, onNavigate }
       setNewModelName('');
       await loadData();
     } catch (err) {
-      alert(`Failed to add model: ${(err as Error).message}`);
+      toast.error(`Failed to add model: ${(err as Error).message}`);
     } finally {
       setSaving(false);
     }
@@ -288,14 +289,14 @@ export const LLMConfigPage: React.FC<LLMConfigPageProps> = ({ user, onNavigate }
           associatedTaskKeys: boundConfigs.length > 0 ? boundConfigs.map((c) => c.taskKey) : ['associated tasks'],
         });
       } else {
-        alert(`Failed to delete model: ${err?.message || String(err)}`);
+        toast.error(`Failed to delete model: ${err?.message || String(err)}`);
       }
     }
   };
 
   const handleCreatePrompt = async () => {
     if (!newPromptKey.trim() || !newPromptContent.trim()) {
-      alert('Prompt key and content are required.');
+      toast.warning('Prompt key and content are required.');
       return;
     }
     setSaving(true);
@@ -311,7 +312,7 @@ export const LLMConfigPage: React.FC<LLMConfigPageProps> = ({ user, onNavigate }
       setNewPromptContent('');
       await loadData();
     } catch (err) {
-      alert(`Failed to create prompt: ${(err as Error).message}`);
+      toast.error(`Failed to create prompt: ${(err as Error).message}`);
     } finally {
       setSaving(false);
     }
@@ -778,8 +779,8 @@ export const LLMConfigPage: React.FC<LLMConfigPageProps> = ({ user, onNavigate }
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#a1a1aa', display: 'block', marginBottom: '0.35rem' }}>Model Name (e.g. gemini-2.5-flash):</label>
-                <input type="text" value={newModelName} onChange={(e) => setNewModelName(e.target.value)} placeholder="gemini-2.5-flash" className="input-field" style={{ width: '100%' }} />
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#a1a1aa', display: 'block', marginBottom: '0.35rem' }}>Model Name (e.g. gemini-3.6-flash):</label>
+                <input type="text" value={newModelName} onChange={(e) => setNewModelName(e.target.value)} placeholder="gemini-3.6-flash" className="input-field" style={{ width: '100%' }} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>

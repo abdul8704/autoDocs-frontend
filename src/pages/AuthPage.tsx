@@ -3,6 +3,8 @@ import { Zap, Github, ShieldCheck, CheckCircle2, Lock, AlertCircle } from 'lucid
 import { getFullApiUrl, getDemoUser } from '../services/api';
 import { User } from '../types';
 
+import logoImg from '../assets/logo.svg';
+
 interface AuthPageProps {
   onLoginSuccess: (demoUser?: User) => void;
 }
@@ -40,20 +42,18 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
         }}
       >
         {/* Brand Icon */}
-        <div
-          style={{
-            width: '56px',
-            height: '56px',
-            borderRadius: '16px',
-            background: 'linear-gradient(135deg, #7c3aed 0%, #34d399 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 1.5rem',
-            boxShadow: '0 0 30px rgba(124, 58, 237, 0.5)',
-          }}
-        >
-          <Zap size={32} color="#ffffff" />
+        <div style={{ margin: '0 auto 1.5rem', display: 'flex', justifyContent: 'center' }}>
+          <img
+            src={logoImg}
+            alt="AutoDocs Logo"
+            style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '16px',
+              boxShadow: '0 0 30px rgba(124, 58, 237, 0.5)',
+              objectFit: 'contain',
+            }}
+          />
         </div>
 
         <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#fafafa', marginBottom: '0.5rem', letterSpacing: '-0.02em' }}>

@@ -34,10 +34,7 @@ export function getFullApiUrl(endpoint: string): string {
 
 export function formatFormattedTimestamp(rawDate?: string | Date | number | null): string {
   if (!rawDate) {
-    const d = new Date();
-    const datePart = d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const timePart = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
-    return `${datePart}, ${timePart}`;
+    return formatDateString(new Date());
   }
 
   let d = new Date(rawDate);
@@ -61,9 +58,15 @@ export function formatFormattedTimestamp(rawDate?: string | Date | number | null
     d = now;
   }
 
-  const datePart = d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const timePart = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
-  return `${datePart}, ${timePart}`;
+  return formatDateString(d);
+}
+
+function formatDateString(d: Date): string {
+  const day = String(d.getDate()).padStart(2, '0');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[d.getMonth()];
+  const year = d.getFullYear();
+  return `${day} ${month} ${year}`;
 }
 
 export function formatDescriptionText(description?: string | null): string {
@@ -225,8 +228,8 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
       const rawEvents = Array.isArray(res.liveEvents)
         ? res.liveEvents
         : Array.isArray(res.liveFeed)
-        ? res.liveFeed
-        : [];
+          ? res.liveFeed
+          : [];
 
       return {
         importedReposCount,
@@ -239,8 +242,8 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
         sparkline7d: Array.isArray(res.sparkline7d)
           ? res.sparkline7d
           : Array.isArray(statsObj.sparklineData)
-          ? statsObj.sparklineData.map((d: any) => d.count || 0)
-          : [0, 0, 0, 0, 0, 0, 0],
+            ? statsObj.sparklineData.map((d: any) => d.count || 0)
+            : [0, 0, 0, 0, 0, 0, 0],
         recentJobs: rawJobs.map((j: any) => mapBackendJobToDocJob(j)),
         liveEvents: rawEvents.map((ev: any) => ({
           id: ev.id || String(Math.random()),
@@ -595,7 +598,7 @@ export async function fetchTaskConfigs(): Promise<TaskConfig[]> {
       return list.map((c: any) => ({
         id: c.id,
         taskKey: c.taskKey,
-        model: c.model?.modelName || 'gemini-2.5-flash',
+        model: c.model?.modelName || 'gemini-3.6-flash',
         provider: (c.model?.provider ? (c.model.provider.charAt(0).toUpperCase() + c.model.provider.slice(1)) : 'Google') as any,
         promptTitle: c.prompt?.promptTitle || c.prompt?.prompt_key || 'Untitled Prompt',
         promptVersion: c.prompt?.version || c.prompt?.prompt_key || 'v1.0',
@@ -796,7 +799,7 @@ function mapBackendJobToDocJob(j: any): DocJob {
     prUrl: j.prLink || j.prUrl || undefined,
     prNumber: j.pullRequestId || j.prNumber || undefined,
     latencyMs: j.tokenBreakdown?.durationMs || 0,
-    modelUsed: j.modelUsed || 'gemini-2.5-flash',
+    modelUsed: j.modelUsed || 'gemini-3.6-flash',
     logs: j.stdoutLogs || [],
   };
 }

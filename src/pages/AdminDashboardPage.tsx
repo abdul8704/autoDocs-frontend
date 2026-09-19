@@ -23,6 +23,7 @@ import {
   rejectCreditRequestApi,
   formatFormattedTimestamp,
 } from '../services/api';
+import { toast } from '../components/Toast';
 
 interface AdminDashboardPageProps {
   onNavigate?: (screen: ActiveScreen) => void;
@@ -68,13 +69,13 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onNaviga
     setSubmitting(true);
     try {
       await approveCreditRequestApi(selectedRequest.id, approvedAmount, adminNote);
-      alert(`Request approved! Granted ${approvedAmount} credits to ${selectedRequest.userEmail}.`);
+      toast.success(`Request approved! Granted ${approvedAmount} credits to ${selectedRequest.userEmail}.`);
       setSelectedRequest(null);
       setActionType(null);
       setAdminNote('');
       loadData();
     } catch (err) {
-      alert(`Approval error: ${(err as Error).message}`);
+      toast.error(`Approval error: ${(err as Error).message}`);
     } finally {
       setSubmitting(false);
     }
@@ -85,7 +86,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onNaviga
     setSubmitting(true);
     try {
       await rejectCreditRequestApi(selectedRequest.id, adminNote);
-      alert(`Request rejected for ${selectedRequest.userEmail}.`);
+      toast.info(`Request rejected for ${selectedRequest.userEmail}.`);
       setSelectedRequest(null);
       setActionType(null);
       setAdminNote('');
@@ -99,10 +100,10 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onNaviga
     if (!confirm(`Are you sure you want to promote ${userEmail} to ADMIN?`)) return;
     try {
       await promoteUserToAdminApi(userId);
-      alert(`User ${userEmail} has been promoted to ADMIN!`);
+      toast.success(`User ${userEmail} has been promoted to ADMIN!`);
       await loadData();
     } catch (err) {
-      alert(`Failed to promote user: ${(err as Error).message}`);
+      toast.error(`Failed to promote user: ${(err as Error).message}`);
     }
   };
 

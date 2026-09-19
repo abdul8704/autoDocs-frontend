@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Clock, AlertCircle, CornerDownRight, FileSearch } from 'lucide-react';
+import { Check, Clock, AlertCircle, CornerDownRight, FileSearch, ExternalLink } from 'lucide-react';
 
 export interface PipelineTimelineProps {
   isFirstTime?: boolean;
@@ -18,22 +18,22 @@ export const PipelineTimeline: React.FC<PipelineTimelineProps> = ({
   const isFailed = status === 'FAILED';
 
   const firstTimeStages = [
-    { id: 1, label: 'cloning repo' },
-    { id: 2, label: 'parsing the codebase' },
-    { id: 3, label: 'building the prompt' },
-    { id: 4, label: 'awaiting llm response' },
-    { id: 5, label: 'finishing up' },
-    { id: 6, label: 'pr raised' },
+    { id: 1, label: 'Cloning Repo' },
+    { id: 2, label: 'Parsing Codebase' },
+    { id: 3, label: 'Building Prompt' },
+    { id: 4, label: 'Awaiting LLM Response' },
+    { id: 5, label: 'Finishing Up' },
+    { id: 6, label: 'PR Raised' },
   ];
 
   const webhookStages = [
-    { id: 1, label: 'cloning repo' },
-    { id: 2, label: 'parsing the codebase' },
-    { id: 3, label: 'checking if docs need revision' },
-    { id: 4, label: 'building the prompt' },
-    { id: 5, label: 'awaiting llm response' },
-    { id: 6, label: 'finishing up' },
-    { id: 7, label: 'pr raised' },
+    { id: 1, label: 'Cloning Repo' },
+    { id: 2, label: 'Parsing Codebase' },
+    { id: 3, label: 'Checking Docs Revision' },
+    { id: 4, label: 'Building Prompt' },
+    { id: 5, label: 'Awaiting LLM Response' },
+    { id: 6, label: 'Finishing Up' },
+    { id: 7, label: 'PR Raised' },
   ];
 
   const stages = isFirstTime ? firstTimeStages : webhookStages;
@@ -156,11 +156,53 @@ export const PipelineTimeline: React.FC<PipelineTimelineProps> = ({
           </span>
         </div>
 
-        <div style={{ fontSize: '0.8rem', color: '#71717a' }}>
-          Status:{' '}
-          <strong style={{ color: isDropped ? '#fbbf24' : isFailed ? '#ef4444' : '#34d399' }}>
-            {status}
-          </strong>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ fontSize: '0.8rem', color: '#71717a' }}>
+            Status:{' '}
+            <strong style={{ color: isDropped ? '#fbbf24' : isFailed ? '#ef4444' : '#34d399' }}>
+              {status}
+            </strong>
+          </div>
+
+          {/* PR Link Button at end of header/bar */}
+          {prLink ? (
+            <a
+              href={prLink}
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-primary"
+              style={{
+                padding: '0.35rem 0.85rem',
+                fontSize: '0.8rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                backgroundColor: '#10b981',
+                borderColor: '#34d399',
+                color: '#ffffff',
+                boxShadow: '0 0 12px rgba(52, 211, 153, 0.4)',
+                textDecoration: 'none',
+              }}
+            >
+              PR Link <ExternalLink size={14} />
+            </a>
+          ) : (
+            <button
+              disabled
+              className="btn btn-secondary"
+              style={{
+                padding: '0.35rem 0.85rem',
+                fontSize: '0.8rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                opacity: 0.5,
+                cursor: 'not-allowed',
+              }}
+            >
+              PR Link
+            </button>
+          )}
         </div>
       </div>
 

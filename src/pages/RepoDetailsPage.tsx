@@ -3,6 +3,7 @@ import { ArrowLeft, Play, GitBranch, GitCommit, FileText, Cpu, Copy, Check, Exte
 import ReactMarkdown from 'react-markdown';
 import { fetchRepoDetails, fetchRepoDocs, triggerDocGen, formatFormattedTimestamp } from '../services/api';
 import { PipelineTimeline } from '../components/PipelineTimeline';
+import { toast } from '../components/Toast';
 
 interface RepoDetailsPageProps {
   repoId: string;
@@ -32,24 +33,9 @@ export const RepoDetailsPage: React.FC<RepoDetailsPageProps> = ({ repoId, onBack
     loadData();
   }, [repoId]);
 
-  const defaultMarkdown = `# ARCHITECTURE.md
-
-## System Architecture Overview
-
-This repository documentation is automatically generated and synchronized on every git commit.
-
-\`\`\`mermaid
-graph TD
-    A[Git Push Webhook] --> B[Codebase Diff Scanner]
-    B --> C[Gemini LLM Engine]
-    C --> D[Pull Request Sync]
-\`\`\`
-`;
-
-  const activeContent = docContent || defaultMarkdown;
-
   const handleCopy = () => {
-    navigator.clipboard.writeText(activeContent);
+    if (!docContent) return;
+    navigator.clipboard.writeText(docContent);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -58,10 +44,10 @@ graph TD
     setTriggering(true);
     try {
       const res = await triggerDocGen(repoId);
-      alert(res.message || 'Manual Doc Generation queued successfully!');
+      toast.success(res.message || 'Manual Doc Generation queued successfully!');
       await loadData();
     } catch (err) {
-      alert(`Trigger error: ${(err as Error).message}`);
+      toast.error(`Trigger error: ${(err as Error).message}`);
     } finally {
       setTriggering(false);
     }
@@ -126,15 +112,56 @@ graph TD
               <FileText size={18} color="#a78bfa" />
               <span style={{ fontWeight: 700, color: '#fafafa', fontSize: '1rem' }}>ARCHITECTURE.md</span>
             </div>
-            <button onClick={handleCopy} className="btn btn-secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}>
+            <button onClick={handleCopy} disabled={!docContent} className="btn btn-secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}>
               {copied ? <Check size={14} color="#34d399" /> : <Copy size={14} />} {copied ? 'Copied!' : 'Copy Markdown'}
             </button>
           </div>
 
-          {/* Rendered Markdown Body Container */}
-          <div style={{ color: '#fafafa', lineHeight: 1.7, fontSize: '0.9rem' }}>
-            <ReactMarkdown>{activeContent}</ReactMarkdown>
-          </div>
+          {/* Rendered Markdown Body Container or Blank Canvas */}
+          {docContent ? (
+            <div className="markdown-body">
+              <ReactMarkdown>{docContent}</ReactMarkdown>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: '340px',
+                border: '2px dashed rgba(255, 255, 255, 0.1)',
+                borderRadius: '12px',
+                padding: '3rem 2rem',
+                textAlign: 'center',
+                backgroundColor: 'rgba(12, 12, 15, 0.6)',
+              }}
+            >
+              <div
+                style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '16px',
+                  backgroundColor: 'rgba(99, 102, 241, 0.12)',
+                  border: '1px solid rgba(99, 102, 241, 0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '1rem',
+                  color: '#a78bfa',
+                }}
+              >
+                <FileText size={28} />
+              </div>
+
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#fafafa', marginBottom: '0.4rem' }}>
+                your generated docs will appear here
+              </h3>
+              <p style={{ fontSize: '0.85rem', color: '#71717a', maxWidth: '420px', margin: 0, lineHeight: 1.5 }}>
+                Once your codebase sync job completes, the AI-generated ARCHITECTURE.md documentation will replace this canvas.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* RIGHT 30% CANVAS: Job History & Cost Sidebar */}
