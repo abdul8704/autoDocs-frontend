@@ -9,6 +9,7 @@ import {
   TrendingUp,
   RefreshCw,
   Cpu,
+  GitMerge,
 } from 'lucide-react';
 import { DocJob } from '../types';
 import { fetchJobs, fetchJobsStats, retryJob, formatFormattedTimestamp } from '../services/api';
@@ -395,7 +396,7 @@ export const JobsLogsPage: React.FC = () => {
 
                     {/* Status Badge */}
                     <td style={{ padding: '1rem 1.2rem' }}>
-                      <span className={`badge ${j.status === 'PR_OPEN' || j.status === 'COMPLETED' || j.status === 'MERGED' ? 'badge-success' : j.status === 'FAILED' || j.status === 'INSUFFICIENT_CREDITS' || j.status === 'DROPPED' || j.status === 'LLM_JUDGE_REJECTED' ? 'badge-danger' : 'badge-warning'}`}>
+                      <span className={`badge ${j.status === 'MERGED' ? 'badge-purple' : j.status === 'PR_OPEN' || j.status === 'COMPLETED' ? 'badge-success' : j.status === 'FAILED' || j.status === 'INSUFFICIENT_CREDITS' ? 'badge-danger' : 'badge-warning'}`}>
                         {j.status}
                       </span>
                     </td>
@@ -407,7 +408,34 @@ export const JobsLogsPage: React.FC = () => {
 
                     {/* Link to PR */}
                     <td style={{ padding: '1rem 1.2rem', fontSize: '0.85rem' }}>
-                      {j.prUrl ? (
+                      {j.status === 'MERGED' ? (
+                        j.prUrl ? (
+                          <a
+                            href={j.prUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn btn-secondary"
+                            style={{
+                              padding: '0.3rem 0.65rem',
+                              fontSize: '0.75rem',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                              color: '#c084fc',
+                              borderColor: 'rgba(168, 85, 247, 0.4)',
+                              backgroundColor: 'rgba(168, 85, 247, 0.12)',
+                              textDecoration: 'none',
+                            }}
+                          >
+                            <GitMerge size={13} color="#c084fc" />
+                            Merged {j.prNumber ? `#${j.prNumber}` : ''} <ArrowUpRight size={13} color="#c084fc" />
+                          </a>
+                        ) : (
+                          <span style={{ color: '#c084fc', fontSize: '0.8rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                            <GitMerge size={13} color="#c084fc" /> Merged
+                          </span>
+                        )
+                      ) : j.status === 'PR_OPEN' && j.prUrl ? (
                         <a
                           href={j.prUrl}
                           target="_blank"
@@ -429,7 +457,7 @@ export const JobsLogsPage: React.FC = () => {
                           Review PR #{j.prNumber || ''} <ArrowUpRight size={13} color="#34d399" />
                         </a>
                       ) : (
-                        <span style={{ color: '#52525b', fontSize: '0.8rem' }}>—</span>
+                        <span style={{ color: '#52525b', fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }}>—</span>
                       )}
                     </td>
 
@@ -453,7 +481,17 @@ export const JobsLogsPage: React.FC = () => {
                           <RefreshCw size={12} className={isRetrying ? 'spin' : ''} />
                           {isRetrying ? 'Retrying...' : 'Retry Job'}
                         </button>
-                      ) : j.prUrl ? (
+                      ) : j.status === 'MERGED' && j.prUrl ? (
+                        <a
+                          href={j.prUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-secondary"
+                          style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', textDecoration: 'none', color: '#c084fc', borderColor: 'rgba(168, 85, 247, 0.3)' }}
+                        >
+                          Merged PR
+                        </a>
+                      ) : j.status === 'PR_OPEN' && j.prUrl ? (
                         <a
                           href={j.prUrl}
                           target="_blank"

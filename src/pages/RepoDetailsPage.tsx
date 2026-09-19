@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Play, GitBranch, GitCommit, FileText, Cpu, Copy, Check, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Play, GitBranch, GitCommit, FileText, Cpu, Copy, Check, ExternalLink, GitMerge, GitPullRequest } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { fetchRepoDetails, fetchRepoDocs, triggerDocGen, formatFormattedTimestamp } from '../services/api';
 import { PipelineTimeline } from '../components/PipelineTimeline';
@@ -207,7 +207,9 @@ export const RepoDetailsPage: React.FC<RepoDetailsPageProps> = ({ repoId, onBack
                         <span style={{ fontWeight: 700, color: '#fafafa', fontFamily: 'var(--font-mono)' }}>#{run.id.slice(0, 8)}</span>
                         <span
                           className={`badge ${
-                            isSuccess
+                            run.status === 'MERGED'
+                              ? 'badge-purple'
+                              : run.status === 'PR_OPEN' || run.status === 'COMPLETED'
                               ? 'badge-success'
                               : isFailed
                               ? 'badge-danger'
@@ -233,7 +235,35 @@ export const RepoDetailsPage: React.FC<RepoDetailsPageProps> = ({ repoId, onBack
                         {formatFormattedTimestamp(run.createdAt)}
                       </div>
 
-                      {prUrl && (
+                      {run.status === 'MERGED' ? (
+                        <div style={{ marginTop: '0.4rem', paddingTop: '0.4rem', borderTop: '1px solid #1e1e22', display: 'flex', justifyContent: 'flex-end' }}>
+                          {prUrl ? (
+                            <a
+                              href={prUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="btn btn-secondary"
+                              style={{
+                                padding: '0.25rem 0.6rem',
+                                fontSize: '0.75rem',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.3rem',
+                                color: '#c084fc',
+                                borderColor: 'rgba(168, 85, 247, 0.4)',
+                                backgroundColor: 'rgba(168, 85, 247, 0.12)',
+                                textDecoration: 'none',
+                              }}
+                            >
+                              <GitMerge size={12} color="#c084fc" /> Merged {prNumber ? `#${prNumber}` : ''} <ExternalLink size={12} />
+                            </a>
+                          ) : (
+                            <span style={{ color: '#c084fc', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                              <GitMerge size={12} color="#c084fc" /> Merged
+                            </span>
+                          )}
+                        </div>
+                      ) : run.status === 'PR_OPEN' && prUrl ? (
                         <div style={{ marginTop: '0.4rem', paddingTop: '0.4rem', borderTop: '1px solid #1e1e22', display: 'flex', justifyContent: 'flex-end' }}>
                           <a
                             href={prUrl}
@@ -246,15 +276,16 @@ export const RepoDetailsPage: React.FC<RepoDetailsPageProps> = ({ repoId, onBack
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: '0.3rem',
-                              color: '#a78bfa',
-                              borderColor: 'rgba(167, 139, 250, 0.3)',
-                              backgroundColor: 'rgba(167, 139, 250, 0.1)',
+                              color: '#34d399',
+                              borderColor: 'rgba(52, 211, 153, 0.3)',
+                              backgroundColor: 'rgba(52, 211, 153, 0.1)',
+                              textDecoration: 'none',
                             }}
                           >
-                            Review PR {prNumber ? `#${prNumber}` : ''} <ExternalLink size={12} />
+                            <GitPullRequest size={12} color="#34d399" /> Review PR {prNumber ? `#${prNumber}` : ''} <ExternalLink size={12} />
                           </a>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   );
                 })

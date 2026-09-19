@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Clock, AlertCircle, CornerDownRight, FileSearch, ExternalLink } from 'lucide-react';
+import { Check, Clock, AlertCircle, CornerDownRight, FileSearch, ExternalLink, GitMerge, GitPullRequest } from 'lucide-react';
 
 export interface PipelineTimelineProps {
   isFirstTime?: boolean;
@@ -159,13 +159,40 @@ export const PipelineTimeline: React.FC<PipelineTimelineProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <div style={{ fontSize: '0.8rem', color: '#71717a' }}>
             Status:{' '}
-            <strong style={{ color: isDropped ? '#fbbf24' : isFailed ? '#ef4444' : '#34d399' }}>
+            <strong style={{ color: status === 'MERGED' ? '#c084fc' : isDropped ? '#fbbf24' : isFailed ? '#ef4444' : '#34d399' }}>
               {status}
             </strong>
           </div>
 
           {/* PR Link Button at end of header/bar */}
-          {prLink ? (
+          {status === 'MERGED' ? (
+            prLink ? (
+              <a
+                href={prLink}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-primary"
+                style={{
+                  padding: '0.35rem 0.85rem',
+                  fontSize: '0.8rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  backgroundColor: '#8957e5',
+                  borderColor: '#a371f7',
+                  color: '#ffffff',
+                  boxShadow: '0 0 14px rgba(168, 85, 247, 0.45)',
+                  textDecoration: 'none',
+                }}
+              >
+                <GitMerge size={14} color="#ffffff" /> Merged PR <ExternalLink size={14} />
+              </a>
+            ) : (
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#c084fc', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                <GitMerge size={14} color="#c084fc" /> Merged
+              </span>
+            )
+          ) : prLink ? (
             <a
               href={prLink}
               target="_blank"
@@ -184,7 +211,7 @@ export const PipelineTimeline: React.FC<PipelineTimelineProps> = ({
                 textDecoration: 'none',
               }}
             >
-              PR Link <ExternalLink size={14} />
+              <GitPullRequest size={14} color="#ffffff" /> PR Link <ExternalLink size={14} />
             </a>
           ) : (
             <button
