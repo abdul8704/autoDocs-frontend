@@ -292,7 +292,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentScreen, onNavigate, u
 
             {/* GitHub App Link CTA */}
             <a
-              href="https://github.com/apps/aiautodocs"
+              href="https://github.com/apps/ai-autodocs"
               target="_blank"
               rel="noreferrer"
               style={{
