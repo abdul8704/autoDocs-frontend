@@ -8,7 +8,7 @@ interface GitHubOnboardingPageProps {
 
 export const GitHubOnboardingPage: React.FC<GitHubOnboardingPageProps> = ({ onComplete }) => {
   const [checking, setChecking] = useState<boolean>(false);
-  const [appSlug, setAppSlug] = useState<string>('aiautodocs');
+  const [appSlug, setAppSlug] = useState<string>('ai-autodocs');
   const [installed, setInstalled] = useState<boolean>(false);
 
   const checkStatus = async () => {
