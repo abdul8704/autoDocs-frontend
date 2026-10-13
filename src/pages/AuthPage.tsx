@@ -1,15 +1,14 @@
 import React, { useMemo } from 'react';
-import { Zap, Github, ShieldCheck, CheckCircle2, Lock, AlertCircle } from 'lucide-react';
-import { getFullApiUrl, getDemoUser } from '../services/api';
-import { User } from '../types';
+import { Github, ShieldCheck, CheckCircle2, Lock, AlertCircle } from 'lucide-react';
+import { getFullApiUrl } from '../services/api';
 
 import logoImg from '../assets/logo.svg';
 
 interface AuthPageProps {
-  onLoginSuccess: (demoUser?: User) => void;
+  onBack?: () => void;
 }
 
-export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
+export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
   const oauthError = useMemo(() => {
     if (typeof window === 'undefined') return null;
     const params = new URLSearchParams(window.location.search);
@@ -116,15 +115,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
           >
             <Github size={18} /> Continue with GitHub OAuth
           </button>
-
-          <button
-            onClick={() => onLoginSuccess(getDemoUser())}
-            className="btn btn-secondary"
-            style={{ width: '100%', padding: '0.8rem 1rem', fontSize: '0.95rem' }}
-          >
-            <Lock size={18} color="#a78bfa" /> Demo Instant Developer Sign-In
-          </button>
         </div>
+
+        {onBack && (
+          <button
+            onClick={onBack}
+            style={{ marginTop: '1.25rem', background: 'none', border: 'none', color: '#a1a1aa', fontSize: '0.85rem', cursor: 'pointer' }}
+          >
+            ← Back to home
+          </button>
+        )}
 
         {/* SOC2 & Security Badges */}
         <div

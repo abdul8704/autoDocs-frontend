@@ -158,20 +158,6 @@ export async function logoutUser(): Promise<void> {
   }
 }
 
-export function getDemoUser(): User {
-  return {
-    id: 'usr_demo_101',
-    email: 'alex.dev@autodocs.io',
-    githubHandle: 'alexdeveloper',
-    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-    plan: 'PRO',
-    creditBalance: 45,
-    monthlyQuota: 100,
-    quotaUsed: 55,
-    githubInstallationId: 98124,
-  };
-}
-
 export async function fetchCurrentUser(): Promise<User | null> {
   try {
     const res = await apiFetch<{ success: boolean; user: any }>('/api/user/me');

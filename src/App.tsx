@@ -18,7 +18,10 @@ import { HeroLandingPage } from './pages/HeroLandingPage';
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [currentScreen, setCurrentScreen] = useState<ActiveScreen>('dashboard');
+  // OAuth failures redirect to the home URL with ?error=..., so open the sign-in card to show it.
+  const [currentScreen, setCurrentScreen] = useState<ActiveScreen>(() =>
+    new URLSearchParams(window.location.search).has('error') ? 'auth' : 'dashboard'
+  );
   const [selectedRepoId, setSelectedRepoId] = useState<string>('repo-1');
   const [loading, setLoading] = useState<boolean>(true);
   const [isGitHubInstalled, setIsGitHubInstalled] = useState<boolean | null>(null);
@@ -39,9 +42,7 @@ export const App: React.FC = () => {
           }
           const status = await fetchInstallationStatus();
           setIsGitHubInstalled(status.isInstalled);
-          if (!status.isInstalled) {
-            setCurrentScreen('onboarding');
-          }
+          setCurrentScreen(status.isInstalled ? 'dashboard' : 'onboarding');
         } else {
           setIsGitHubInstalled(null);
         }
@@ -100,25 +101,7 @@ export const App: React.FC = () => {
   // Strictly block unauthenticated users from seeing AppShell / Dashboard. Default unauthenticated view is Hero Landing Page.
   if (!user) {
     if (currentScreen === 'auth') {
-      return (
-        <AuthPage
-          onLoginSuccess={async (demoUser) => {
-            if (demoUser) {
-              setUser(demoUser);
-            } else {
-              const fetchedUser = await fetchCurrentUser();
-              setUser(fetchedUser);
-            }
-            const status = await fetchInstallationStatus();
-            setIsGitHubInstalled(status.isInstalled);
-            if (!status.isInstalled) {
-              setCurrentScreen('onboarding');
-            } else {
-              setCurrentScreen('dashboard');
-            }
-          }}
-        />
-      );
+      return <AuthPage onBack={() => setCurrentScreen('dashboard')} />;
     }
     return <HeroLandingPage onStartDemo={() => setCurrentScreen('auth')} />;
   }
